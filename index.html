@@ -1,0 +1,2644 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>沉浸阅读器</title>
+<style>
+/* ========== CSS 变量 & 主题 ========== */
+:root {
+  --bg-primary: #F5F0E8;
+  --bg-secondary: #EDE8DC;
+  --text-primary: #2C2C2C;
+  --text-secondary: #666;
+  --text-muted: #999;
+  --border-color: rgba(0,0,0,0.08);
+  --accent: #8B7355;
+  --accent-hover: #A0896A;
+  --highlight: #FFEB3B;
+  --highlight-current: #FF9800;
+  --shadow: rgba(0,0,0,0.12);
+  --overlay: rgba(0,0,0,0.4);
+  --navbar-bg: rgba(245,240,232,0.85);
+  --sidebar-width: 320px;
+  --topbar-height: 40px;
+  --bottombar-height: 32px;
+  --page-max-width: 720px;
+  --font-size: 18px;
+  --line-height: 1.8;
+  --font-family: '宋体', SimSun, serif;
+  --content-width: 680px;
+  --layout-side: left;
+}
+
+.night-mode {
+  --bg-primary: #1A1A1A;
+  --bg-secondary: #242424;
+  --text-primary: #D4C5A0;
+  --text-secondary: #A89870;
+  --text-muted: #776B55;
+  --border-color: rgba(255,255,255,0.06);
+  --accent: #C4A96A;
+  --accent-hover: #D4BA7A;
+  --navbar-bg: rgba(26,26,26,0.9);
+  --shadow: rgba(0,0,0,0.4);
+  --overlay: rgba(0,0,0,0.7);
+}
+
+/* ========== 全局重置 ========== */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: var(--font-family);
+  font-size: var(--font-size);
+  line-height: var(--line-height);
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  transition: background 0.3s, color 0.3s;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* ========== 顶部导航栏 ========== */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: var(--topbar-height);
+  background: var(--navbar-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border-color);
+  display: flex; align-items: center;
+  padding: 0 12px;
+  z-index: 100;
+  transition: transform 0.3s, opacity 0.3s;
+}
+.topbar.hidden { transform: translateY(-100%); opacity: 0; pointer-events: none; }
+.topbar-left, .topbar-center, .topbar-right {
+  display: flex; align-items: center; gap: 4px;
+}
+.topbar-left { flex: 1; justify-content: flex-start; }
+.topbar-center { flex: 0 0 auto; }
+.topbar-right { flex: 1; justify-content: flex-end; }
+
+/* ========== 图标按钮 ========== */
+.icon-btn {
+  width: 32px; height: 32px;
+  border: none; background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  transition: background 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+.icon-btn:hover { background: var(--border-color); color: var(--text-primary); }
+.icon-btn.active { color: var(--accent); }
+.icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ========== 文件名显示 ========== */
+.file-name {
+  font-size: 13px; color: var(--text-muted);
+  max-width: 300px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+  padding: 0 8px;
+}
+
+/* ========== 搜索栏 ========== */
+.search-bar {
+  position: fixed; top: var(--topbar-height); left: 0; right: 0;
+  height: 44px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex; align-items: center;
+  padding: 0 12px; gap: 8px;
+  z-index: 99;
+  transform: translateY(-100%); opacity: 0;
+  transition: transform 0.25s, opacity 0.25s;
+}
+.search-bar.visible { transform: translateY(0); opacity: 1; }
+.search-bar input {
+  flex: 1; height: 30px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0 10px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+}
+.search-bar input:focus { border-color: var(--accent); }
+.search-bar .search-info {
+  font-size: 12px; color: var(--text-muted);
+  white-space: nowrap; min-width: 80px; text-align: center;
+}
+.search-bar .search-options { display: flex; gap: 4px; }
+.search-bar .search-options label {
+  font-size: 12px; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 2px; cursor: pointer;
+}
+.search-bar .search-options input[type="checkbox"] { margin: 0; cursor: pointer; }
+
+/* ========== 主阅读区 ========== */
+.reader-container {
+  position: fixed;
+  top: var(--topbar-height);
+  left: 0; right: 0;
+  bottom: var(--bottombar-height);
+  overflow: hidden;
+  transition: top 0.3s;
+}
+.reader-container.fullscreen-mode {
+  top: 0;
+  bottom: 0;
+}
+
+/* 阅读内容区 */
+.reader-content {
+  width: 100%; 
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex; 
+  justify-content: center;
+  align-items: flex-start;
+  padding: 24px 0;
+  box-sizing: border-box;
+  scroll-behavior: smooth;
+}
+.reader-content::-webkit-scrollbar { width: 6px; }
+.reader-content::-webkit-scrollbar-track { background: transparent; }
+.reader-content::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+.reader-content::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+.content-wrapper {
+  width: var(--content-width);
+  max-width: 90vw;
+  min-height: 100%;
+  padding: 20px 0;
+  position: relative;
+}
+
+/* 分页模式 */
+.content-wrapper.page-mode {
+  overflow: hidden;
+}
+.content-wrapper.page-mode .page-content {
+  display: none;
+}
+.content-wrapper.page-mode .page-content.active {
+  display: block;
+}
+
+/* 滚动模式 */
+.content-wrapper.scroll-mode .page-content {
+  display: block !important;
+  margin-bottom: 0;
+}
+
+/* 文本段落样式 */
+.page-content p,
+.page-content .para {
+  text-indent: 2em;
+  margin-bottom: 0.5em;
+  word-break: break-all;
+  word-wrap: break-word;
+}
+
+/* 搜索高亮 */
+.search-highlight { background: var(--highlight); border-radius: 2px; padding: 0 1px; }
+.search-highlight.current { background: var(--highlight-current); }
+
+/* ========== 底部状态栏 ========== */
+.bottombar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  height: var(--bottombar-height);
+  background: var(--navbar-bg);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border-color);
+  display: flex; align-items: center; justify-content: center;
+  gap: 16px;
+  font-size: 12px; color: var(--text-muted);
+  z-index: 100;
+  transition: transform 0.3s, opacity 0.3s;
+}
+.bottombar.hidden { transform: translateY(100%); opacity: 0; pointer-events: none; }
+
+/* ========== 侧边栏 ========== */
+.sidebar-overlay {
+  position: fixed; inset: 0;
+  background: var(--overlay);
+  z-index: 200;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.3s;
+}
+.sidebar-overlay.visible { opacity: 1; pointer-events: auto; }
+
+.sidebar {
+  position: fixed; top: 0; bottom: 0;
+  width: var(--sidebar-width);
+  max-width: 85vw;
+  background: var(--bg-primary);
+  z-index: 201;
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex; flex-direction: column;
+  box-shadow: 4px 0 20px var(--shadow);
+}
+.sidebar.right-layout {
+  right: 0; left: auto;
+  transform: translateX(100%);
+  box-shadow: -4px 0 20px var(--shadow);
+}
+.sidebar.visible { transform: translateX(0); }
+
+.sidebar-header {
+  height: var(--topbar-height);
+  display: flex; align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.sidebar-header h3 {
+  font-size: 15px; font-weight: 600;
+  color: var(--text-primary);
+}
+.sidebar-body {
+  flex: 1; overflow-y: auto;
+  padding: 12px;
+}
+.sidebar-body::-webkit-scrollbar { width: 4px; }
+.sidebar-body::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 2px; }
+
+/* ========== 目录项 ========== */
+.toc-item {
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.2s;
+  display: flex; align-items: center; gap: 8px;
+}
+.toc-item:hover { background: var(--border-color); }
+.toc-item.current { color: var(--accent); background: rgba(139,115,85,0.1); font-weight: 600; }
+.toc-item .toc-level { color: var(--text-muted); font-size: 12px; flex-shrink: 0; }
+.toc-item.indent-1 { padding-left: 28px; }
+.toc-item.indent-2 { padding-left: 44px; }
+
+/* ========== 书签项 ========== */
+.bookmark-item {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.bookmark-item:hover { background: var(--border-color); }
+.bookmark-item .bm-name {
+  font-size: 14px; color: var(--text-primary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bookmark-item .bm-meta {
+  font-size: 12px; color: var(--text-muted); margin-top: 4px;
+  display: flex; gap: 12px;
+}
+.bookmark-item .bm-delete {
+  float: right; border: none; background: transparent;
+  color: var(--text-muted); cursor: pointer; font-size: 16px;
+  padding: 2px 4px; border-radius: 4px;
+}
+.bookmark-item .bm-delete:hover { color: #E53935; background: rgba(229,57,53,0.1); }
+
+/* ========== 书架项 ========== */
+.bookshelf-item {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.bookshelf-item:hover { background: var(--border-color); }
+.bookshelf-item .bs-name {
+  font-size: 14px; color: var(--text-primary); font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bookshelf-item .bs-meta {
+  font-size: 12px; color: var(--text-muted); margin-top: 4px;
+  display: flex; gap: 12px;
+}
+.bookshelf-item .bs-progress {
+  margin-top: 6px; height: 3px;
+  background: var(--border-color); border-radius: 2px;
+  overflow: hidden;
+}
+.bookshelf-item .bs-progress-bar {
+  height: 100%; background: var(--accent); border-radius: 2px;
+  transition: width 0.3s;
+}
+.bookshelf-item .bs-delete {
+  position: absolute; right: -60px; top: 0; bottom: 0;
+  width: 60px; background: #E53935; color: #fff;
+  border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; transition: right 0.3s;
+}
+.bookshelf-item.swiped .bs-delete { right: 0; }
+
+/* ========== 设置面板 ========== */
+.settings-panel {
+  position: fixed;
+  top: var(--topbar-height);
+  bottom: var(--bottombar-height);
+  width: 340px;
+  max-width: 90vw;
+  background: var(--bg-primary);
+  z-index: 150;
+  border: 1px solid var(--border-color);
+  overflow-y: auto;
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 4px 0 20px var(--shadow);
+}
+.settings-panel.right-layout {
+  right: 0; left: auto;
+  transform: translateX(100%);
+  box-shadow: -4px 0 20px var(--shadow);
+}
+.settings-panel.visible { transform: translateX(0); }
+
+.settings-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+.settings-section h4 {
+  font-size: 13px; font-weight: 600;
+  color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.5px; margin-bottom: 12px;
+}
+.setting-row {
+  display: flex; align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.setting-row label {
+  font-size: 14px; color: var(--text-secondary);
+}
+.setting-row input[type="range"] {
+  width: 140px; height: 4px;
+  -webkit-appearance: none; appearance: none;
+  background: var(--border-color); border-radius: 2px;
+  outline: none;
+}
+.setting-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+}
+.setting-row select, .setting-row input[type="number"] {
+  height: 30px; padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+.setting-row select:focus, .setting-row input[type="number"]:focus {
+  border-color: var(--accent);
+}
+
+/* 【新增】颜色预设色块通用样式 */
+.color-presets {
+  display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+}
+.color-preset {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  flex-shrink: 0;
+}
+.color-preset:hover { transform: scale(1.15); box-shadow: 0 2px 8px var(--shadow); }
+.color-preset.active { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(139,115,85,0.3); }
+
+/* 【新增】自定义取色器样式 */
+.color-picker-row {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px;
+}
+.color-picker-row label {
+  font-size: 13px; color: var(--text-secondary); white-space: nowrap;
+}
+.color-picker-row input[type="color"] {
+  width: 36px; height: 28px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 2px;
+  background: var(--bg-secondary);
+}
+
+/* 【新增】透明度滑块带刻度 */
+.opacity-slider-wrap {
+  margin-top: 10px;
+}
+.opacity-slider-wrap .slider-labels {
+  display: flex; justify-content: space-between;
+  font-size: 11px; color: var(--text-muted);
+  margin-bottom: 4px; padding: 0 2px;
+}
+.opacity-slider-wrap input[type="range"] {
+  width: 100%; height: 4px;
+  -webkit-appearance: none; appearance: none;
+  background: linear-gradient(to right, rgba(255,255,255,0.9), var(--accent));
+  border-radius: 2px; outline: none;
+}
+.opacity-slider-wrap input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 1px 4px var(--shadow);
+}
+
+/* 【兼容保留】旧背景预设色块样式（已由 .color-preset 替代） */
+.bg-presets {
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.bg-preset {
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s;
+}
+.bg-preset:hover { transform: scale(1.1); }
+.bg-preset.active { border-color: var(--accent); }
+
+/* 布局单选 */
+.layout-options { display: flex; gap: 8px; }
+.layout-option {
+  flex: 1; padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  text-align: center; cursor: pointer;
+  font-size: 13px; color: var(--text-secondary);
+  transition: all 0.2s;
+}
+.layout-option:hover { border-color: var(--accent); }
+.layout-option.active {
+  border-color: var(--accent);
+  background: rgba(139,115,85,0.1);
+  color: var(--accent);
+}
+
+/* ========== 欢迎页 ========== */
+.welcome-screen {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  height: 100%; color: var(--text-muted);
+  text-align: center; padding: 40px;
+}
+.welcome-screen svg { width: 80px; height: 80px; stroke: var(--text-muted); fill: none; stroke-width: 1; margin-bottom: 20px; opacity: 0.5; }
+.welcome-screen h2 { font-size: 22px; font-weight: 400; margin-bottom: 8px; color: var(--text-secondary); }
+.welcome-screen p { font-size: 14px; margin-bottom: 24px; }
+.welcome-btn {
+  padding: 10px 28px;
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 15px; cursor: pointer;
+  transition: all 0.2s;
+}
+.welcome-btn:hover { background: var(--accent); color: #fff; }
+
+/* ========== 拖拽提示 ========== */
+.drop-overlay {
+  position: fixed; inset: 0;
+  background: rgba(139,115,85,0.15);
+  border: 3px dashed var(--accent);
+  z-index: 500;
+  display: none;
+  align-items: center; justify-content: center;
+  font-size: 18px; color: var(--accent);
+}
+.drop-overlay.visible { display: flex; }
+
+/* ========== 自动滚动指示器 ========== */
+.autoscroll-indicator {
+  position: fixed; bottom: 48px; left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 16px;
+  background: var(--accent);
+  color: #fff; border-radius: 20px;
+  font-size: 12px; z-index: 90;
+  display: none; gap: 8px; align-items: center;
+}
+.autoscroll-indicator.visible { display: flex; }
+.autoscroll-indicator button {
+  border: none; background: rgba(255,255,255,0.2);
+  color: #fff; border-radius: 50%;
+  width: 24px; height: 24px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+}
+
+/* ========== Toast 提示 ========== */
+.toast {
+  position: fixed; bottom: 60px; left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 8px 20px;
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 999;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+}
+.toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ========== 模式切换按钮组 ========== */
+.mode-group {
+  display: flex; gap: 2px;
+  background: var(--border-color);
+  border-radius: 6px; padding: 2px;
+}
+.mode-btn {
+  padding: 4px 10px;
+  border: none; background: transparent;
+  color: var(--text-muted); font-size: 12px;
+  cursor: pointer; border-radius: 4px;
+  transition: all 0.2s;
+}
+.mode-btn.active { background: var(--bg-primary); color: var(--text-primary); box-shadow: 0 1px 3px var(--shadow); }
+
+/* ========== 隐藏 file input ========== */
+.hidden-input { display: none; }
+
+/* ========== 背景图片层 ========== */
+.bg-image-layer {
+  position: fixed; inset: 0;
+  z-index: -1;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* ========== PDF 渲染 ========== */
+.pdf-page-img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto 12px;
+  box-shadow: 0 2px 8px var(--shadow);
+}
+
+/* ========== 响应式 - 移动端 (<768px) ========== */
+@media (max-width: 767px) {
+  :root { --content-width: 100vw; --sidebar-width: 100vw; --topbar-height: 44px; --bottombar-height: 0px; }
+  html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .content-wrapper { padding: 12px 10px; }
+  .topbar { padding: 0 8px; }
+  .file-name { max-width: 100px; font-size: 12px; }
+
+  /* 【移动端】工具栏：隐藏次要按钮，显示"更多"按钮 */
+  .topbar-right .mobile-hide { display: none !important; }
+  .topbar-right .mobile-show { display: flex !important; }
+
+  /* 【移动端】图标按钮触摸目标 ≥ 44px */
+  .icon-btn { width: 40px; height: 40px; }
+  .icon-btn svg { width: 20px; height: 20px; }
+
+  /* 【移动端】侧边栏全屏覆盖 */
+  .sidebar { width: 100vw; max-width: 100vw; border-radius: 0; }
+  .sidebar-header { height: 48px; padding: 0 12px; }
+  .sidebar-header h3 { font-size: 16px; }
+
+  /* 【移动端】底部状态栏隐藏（改用浮动翻页箭头+胶囊页码） */
+  .bottombar { display: none; }
+
+  /* 【移动端】浮动翻页箭头 */
+  .mobile-page-nav { display: flex !important; }
+  .mobile-page-arrow {
+    position: fixed; top: 50%; transform: translateY(-50%);
+    width: 48px; height: 80px;
+    background: rgba(0,0,0,0.15);
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); font-size: 24px;
+    z-index: 80; transition: background 0.2s;
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .mobile-page-arrow:active { background: rgba(0,0,0,0.3); }
+  .mobile-page-arrow.prev { left: 4px; border-radius: 0 12px 12px 0; }
+  .mobile-page-arrow.next { right: 4px; border-radius: 12px 0 0 12px; }
+
+  /* 【移动端】浮动页码胶囊 */
+  .mobile-page-capsule {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+    padding: 6px 16px;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    color: #fff; border-radius: 20px;
+    font-size: 12px; z-index: 80;
+    display: flex; gap: 12px; align-items: center;
+    pointer-events: none;
+  }
+
+  /* 【移动端】搜索栏全宽 */
+  .search-bar { height: auto; flex-wrap: wrap; padding: 8px 10px; gap: 6px; }
+  .search-bar input { font-size: 16px; min-width: 0; flex: 1 1 100%; }
+  .search-bar .search-options { flex: 1 1 100%; flex-wrap: wrap; }
+  .search-bar .search-info { min-width: auto; }
+
+  /* 【移动端】设置面板改为底部弹出 */
+  .settings-panel {
+    top: auto; bottom: 0; left: 0; right: 0;
+    width: 100vw; max-width: 100vw;
+    height: 65vh; max-height: 70vh;
+    border-radius: 16px 16px 0 0;
+    border: none; border-top: 1px solid var(--border-color);
+    transform: translateY(100%);
+    box-shadow: 0 -4px 24px var(--shadow);
+  }
+  .settings-panel.right-layout { right: 0; transform: translateY(100%); }
+  .settings-panel.visible { transform: translateY(0); }
+
+  /* 【移动端】"更多"下拉菜单 */
+  .mobile-more-menu {
+    position: fixed; top: var(--topbar-height); right: 0;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 0 0 0 12px;
+    box-shadow: -2px 4px 16px var(--shadow);
+    z-index: 110;
+    padding: 8px 0;
+    transform: scaleY(0); transform-origin: top right;
+    transition: transform 0.2s;
+  }
+  .mobile-more-menu.visible { transform: scaleY(1); }
+  .mobile-more-menu button {
+    display: flex; align-items: center; gap: 10px;
+    width: 100%; padding: 12px 16px;
+    border: none; background: transparent;
+    color: var(--text-secondary); font-size: 14px;
+    cursor: pointer; text-align: left;
+  }
+  .mobile-more-menu button:active { background: var(--border-color); }
+  .mobile-more-menu button svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+  /* 【移动端】书架项适配触摸 */
+  .bookshelf-item { padding: 14px 12px; min-height: 60px; }
+  .bookshelf-item .bs-delete { width: 80px; font-size: 14px; }
+
+  /* 【移动端】设置面板内区域间距 */
+  .settings-section { padding: 14px 16px; }
+  .settings-section h4 { font-size: 12px; margin-bottom: 10px; }
+  .setting-row { margin-bottom: 8px; }
+  .setting-row label { font-size: 13px; }
+
+  /* 【移动端】自动滚动指示器位置 */
+  .autoscroll-indicator { bottom: 48px; }
+}
+
+/* ========== 电脑端 (≥768px) 隐藏移动端专用元素 ========== */
+.mobile-page-nav,
+.mobile-page-capsule,
+.mobile-more-menu {
+  display: none;
+}
+
+/* 【移动端】默认隐藏"更多"按钮，电脑端不显示 */
+.mobile-show { display: none !important; }
+@media (max-width: 767px) {
+  .mobile-show { display: flex !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- 背景图片层 -->
+<div class="bg-image-layer" id="bgImageLayer"></div>
+
+<!-- 拖拽提示 -->
+<div class="drop-overlay" id="dropOverlay">释放文件以打开</div>
+
+<!-- Toast 提示 -->
+<div class="toast" id="toast"></div>
+
+<!-- 顶部导航栏 -->
+<div class="topbar" id="topbar">
+  <div class="topbar-left" id="topbarLeft">
+    <!-- 动态按钮：目录、书架、书签 -->
+  </div>
+  <div class="topbar-center">
+    <span class="file-name" id="fileName">未打开文件</span>
+  </div>
+  <div class="topbar-right">
+    <button class="icon-btn" id="btnSearch" title="搜索 (Ctrl+F)">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+    </button>
+    <button class="icon-btn mobile-hide" id="btnBookmark" title="添加书签">
+      <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+    </button>
+    <button class="icon-btn mobile-hide" id="btnSettings" title="设置">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+    <button class="icon-btn mobile-hide" id="btnFullscreen" title="全屏 (F11)">
+      <svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+    </button>
+    <button class="icon-btn mobile-hide" id="btnNight" title="夜间模式">
+      <svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    </button>
+    <!-- 【新增】移动端"更多"菜单按钮 -->
+    <button class="icon-btn mobile-show" id="btnMore" title="更多">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- 搜索栏 -->
+<div class="search-bar" id="searchBar">
+  <input type="text" id="searchInput" placeholder="搜索关键词...">
+  <div class="search-options">
+    <label><input type="checkbox" id="searchCaseSensitive"> 区分大小写</label>
+    <label><input type="checkbox" id="searchWholeWord"> 全字匹配</label>
+  </div>
+  <div class="search-info" id="searchInfo"></div>
+  <button class="icon-btn" id="searchPrev" title="上一个 (Shift+Enter)">
+    <svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg>
+  </button>
+  <button class="icon-btn" id="searchNext" title="下一个 (Enter)">
+    <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+  </button>
+  <button class="icon-btn" id="searchClose" title="关闭">
+    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+</div>
+
+<!-- 主阅读区 -->
+<div class="reader-container" id="readerContainer">
+  <div class="reader-content" id="readerContent">
+    <div class="content-wrapper page-mode" id="contentWrapper">
+      <!-- 欢迎页 -->
+      <div class="welcome-screen" id="welcomeScreen">
+        <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        <h2>沉浸阅读器</h2>
+        <p>点击下方按钮或拖拽文件到此处开始阅读</p>
+        <button class="welcome-btn" id="btnOpenFile">选择文件</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 自动滚动指示器 -->
+<div class="autoscroll-indicator" id="autoscrollIndicator">
+  <button id="autoScrollSlower">−</button>
+  <span id="autoScrollSpeed">2</span>
+  <button id="autoScrollFaster">+</button>
+  <button id="autoScrollToggle">⏸</button>
+</div>
+
+<!-- 底部状态栏 -->
+<div class="bottombar" id="bottombar">
+  <div class="mode-group">
+    <button class="mode-btn active" data-mode="page">分页</button>
+    <button class="mode-btn" data-mode="scroll">滚动</button>
+    <button class="mode-btn" data-mode="auto">自动</button>
+  </div>
+  <span id="statusInfo">-- / --</span>
+  <span id="statusPercent">--%</span>
+</div>
+
+<!-- 【新增】移动端浮动翻页箭头 -->
+<div class="mobile-page-nav" id="mobilePageNav">
+  <button class="mobile-page-arrow prev" id="mobilePrevPage">‹</button>
+  <button class="mobile-page-arrow next" id="mobileNextPage">›</button>
+</div>
+<!-- 【新增】移动端浮动页码胶囊 -->
+<div class="mobile-page-capsule" id="mobilePageCapsule">
+  <span id="mobileStatusInfo">-- / --</span>
+  <span id="mobileStatusPercent">--%</span>
+</div>
+
+<!-- 【新增】移动端"更多"下拉菜单 -->
+<div class="mobile-more-menu" id="mobileMoreMenu">
+  <button id="mmBookmark"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>添加书签</button>
+  <button id="mmSettings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>设置</button>
+  <button id="mmFullscreen"><svg viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>全屏</button>
+  <button id="mmNight"><svg viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>夜间模式</button>
+</div>
+
+<!-- 侧边栏遮罩 -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- 目录侧边栏 -->
+<div class="sidebar" id="tocSidebar">
+  <div class="sidebar-header">
+    <h3>目录</h3>
+    <button class="icon-btn" id="closeToc"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="sidebar-body" id="tocList"></div>
+</div>
+
+<!-- 书签侧边栏 -->
+<div class="sidebar" id="bookmarkSidebar">
+  <div class="sidebar-header">
+    <h3>书签</h3>
+    <button class="icon-btn" id="closeBookmark"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+  </div>
+  <div class="sidebar-body" id="bookmarkList"></div>
+</div>
+
+<!-- 书架侧边栏 -->
+<div class="sidebar" id="bookshelfSidebar">
+  <div class="sidebar-header">
+    <h3>书架</h3>
+    <div style="display:flex;gap:4px;">
+      <button class="icon-btn" id="addBookBtn" title="添加书籍"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      <button class="icon-btn" id="closeBookshelf"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+  </div>
+  <div class="sidebar-body" id="bookshelfList"></div>
+</div>
+
+<!-- 设置面板 -->
+<div class="settings-panel" id="settingsPanel">
+  <!-- 【修改】排版区域：移除旧字色行（已移至字体颜色区域） -->
+  <div class="settings-section">
+    <h4>排版</h4>
+    <div class="setting-row">
+      <label>字体</label>
+      <select id="setFont">
+        <option value="'宋体', SimSun, serif">宋体</option>
+        <option value="'黑体', SimHei, sans-serif">黑体</option>
+        <option value="'楷体', KaiTi, serif">楷体</option>
+        <option value="'仿宋', FangSong, serif">仿宋</option>
+        <option value="'微软雅黑', 'Microsoft YaHei', sans-serif">微软雅黑</option>
+        <option value="Georgia, serif">Georgia</option>
+        <option value="'Times New Roman', serif">Times New Roman</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <label>字号 <span id="fontSizeVal"></span></label>
+      <input type="range" id="setFontSize" min="12" max="32" step="1">
+    </div>
+    <div class="setting-row">
+      <label>行距 <span id="lineHeightVal"></span></label>
+      <input type="range" id="setLineHeight" min="1.2" max="3.0" step="0.1">
+    </div>
+    <div class="setting-row">
+      <label>页宽 <span id="contentWidthVal"></span></label>
+      <input type="range" id="setContentWidth" min="500" max="1200" step="20">
+    </div>
+  </div>
+
+  <!-- 【新增】字体颜色区域 -->
+  <div class="settings-section">
+    <h4>字体颜色</h4>
+    <div class="color-presets" id="fontColorPresets">
+      <div class="color-preset" data-color="#000000" style="background:#000000;" title="纯黑"></div>
+      <div class="color-preset" data-color="#333333" style="background:#333333;" title="深灰"></div>
+      <div class="color-preset" data-color="#1A1A1A" style="background:#1A1A1A;" title="炭黑"></div>
+      <div class="color-preset" data-color="#3E2723" style="background:#3E2723;" title="深棕"></div>
+      <div class="color-preset" data-color="#0D47A1" style="background:#0D47A1;" title="深蓝"></div>
+      <div class="color-preset" data-color="#FFFFFF" style="background:#FFFFFF;border:1px solid #ccc;" title="纯白（夜间）"></div>
+      <div class="color-preset" data-color="#F5E6C8" style="background:#F5E6C8;" title="暖黄（夜间）"></div>
+      <div class="color-preset" data-color="#BDBDBD" style="background:#BDBDBD;" title="浅灰"></div>
+    </div>
+    <div class="color-picker-row">
+      <label>自定义</label>
+      <input type="color" id="setFontColor" value="#2C2C2C">
+    </div>
+  </div>
+
+  <!-- 【修改】背景颜色区域：扩展预设色块 + 取色器 + 透明度 -->
+  <div class="settings-section">
+    <h4>背景颜色</h4>
+    <div class="color-presets" id="bgColorPresets">
+      <div class="color-preset" data-color="#F5F0E8" style="background:#F5F0E8;" title="暖白"></div>
+      <div class="color-preset" data-color="#FDF5E6" style="background:#FDF5E6;" title="米黄"></div>
+      <div class="color-preset" data-color="#E8F5E9" style="background:#E8F5E9;" title="浅绿"></div>
+      <div class="color-preset" data-color="#E3F2FD" style="background:#E3F2FD;" title="浅蓝"></div>
+      <div class="color-preset" data-color="#EEEEEE" style="background:#EEEEEE;" title="浅灰"></div>
+      <div class="color-preset" data-color="#000000" style="background:#000000;" title="纯黑（夜间）"></div>
+      <div class="color-preset" data-color="#C8E6C9" style="background:#C8E6C9;" title="护眼绿"></div>
+      <div class="color-preset" data-color="#F5DEB3" style="background:#F5DEB3;" title="羊皮纸"></div>
+    </div>
+    <div class="color-picker-row">
+      <label>自定义</label>
+      <input type="color" id="setBgColor" value="#F5F0E8">
+    </div>
+    <div class="opacity-slider-wrap">
+      <div class="slider-labels"><span>10%</span><span>50%</span><span>100%</span></div>
+      <input type="range" id="setBgOpacity2" min="10" max="100" step="5" value="100">
+    </div>
+    <div class="setting-row" style="margin-top:12px;">
+      <label>背景图片</label>
+      <button class="icon-btn" id="btnUploadBg" title="上传背景图">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+      </button>
+    </div>
+    <div class="setting-row" id="bgOpacityRow" style="display:none;">
+      <label>图片透明度 <span id="bgOpacityVal">50%</span></label>
+      <input type="range" id="setBgOpacity" min="0" max="100" step="5" value="50">
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h4>布局</h4>
+    <div class="layout-options">
+      <div class="layout-option active" data-layout="left">左侧</div>
+      <div class="layout-option" data-layout="right">右侧</div>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h4>编码</h4>
+    <div class="setting-row">
+      <label>文件编码</label>
+      <select id="setEncoding">
+        <option value="auto">自动检测</option>
+        <option value="utf-8">UTF-8</option>
+        <option value="gbk">GBK</option>
+        <option value="gb18030">GB18030</option>
+        <option value="big5">BIG5</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- 隐藏的文件输入 -->
+<input type="file" class="hidden-input" id="fileInput" accept=".txt,.text,.pdf" multiple>
+<input type="file" class="hidden-input" id="bgFileInput" accept=".jpg,.jpeg,.png,.gif">
+
+<script>
+/* ================================================================
+   沉浸阅读器 - 完整 JavaScript
+   ================================================================ */
+
+// ========== 工具函数 ==========
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+const LS_PREFIX = 'reader_';
+
+function lsGet(key, def) {
+  try { const v = localStorage.getItem(LS_PREFIX + key); return v !== null ? JSON.parse(v) : def; }
+  catch { return def; }
+}
+function lsSet(key, val) {
+  try { localStorage.setItem(LS_PREFIX + key, JSON.stringify(val)); } catch {}
+}
+function lsRemove(key) {
+  try { localStorage.removeItem(LS_PREFIX + key); } catch {}
+}
+
+/** 简单哈希（用于文件唯一标识） */
+function simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  return 'h' + Math.abs(h).toString(36);
+}
+
+/** 格式化文件大小 */
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+/** 格式化时间 */
+function formatTime(ts) {
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** 显示 Toast */
+function showToast(msg, duration = 2000) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('visible');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('visible'), duration);
+}
+
+// ========== 编码检测 ==========
+function detectEncoding(buffer) {
+  const bytes = new Uint8Array(buffer);
+  // 检查 UTF-8 BOM
+  if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    return 'utf-8';
+  }
+  // 检查 UTF-16 LE BOM
+  if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) return 'utf-16le';
+  // 检查 UTF-16 BE BOM
+  if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) return 'utf-16be';
+  // 尝试 UTF-8 合法性检测
+  let isUtf8 = true;
+  let i = 0;
+  while (i < bytes.length) {
+    if (bytes[i] < 0x80) { i++; continue; }
+    let seqLen = 0;
+    if ((bytes[i] & 0xE0) === 0xC0) seqLen = 2;
+    else if ((bytes[i] & 0xF0) === 0xE0) seqLen = 3;
+    else if ((bytes[i] & 0xF8) === 0xF0) seqLen = 4;
+    else { isUtf8 = false; break; }
+    if (i + seqLen > bytes.length) { isUtf8 = false; break; }
+    for (let j = 1; j < seqLen; j++) {
+      if ((bytes[i + j] & 0xC0) !== 0x80) { isUtf8 = false; break; }
+    }
+    if (!isUtf8) break;
+    i += seqLen;
+  }
+  return isUtf8 ? 'utf-8' : 'gbk';
+}
+
+function decodeBuffer(buffer, encoding) {
+  if (encoding === 'utf-8' || encoding === 'auto') {
+    const detected = encoding === 'auto' ? detectEncoding(buffer) : 'utf-8';
+    if (detected === 'utf-8') {
+      return new TextDecoder('utf-8').decode(buffer);
+    }
+    return new TextDecoder(detected).decode(buffer);
+  }
+  try {
+    return new TextDecoder(encoding).decode(buffer);
+  } catch {
+    return new TextDecoder('gbk').decode(buffer);
+  }
+}
+
+// ========== 应用状态 ==========
+const state = {
+  currentFile: null,        // { name, size, hash, text, type }
+  readMode: 'page',         // page | scroll | auto
+  currentPage: 0,
+  totalPages: 0,
+  pages: [],                // 分页后的文本数组
+  toc: [],                  // 目录项 [{title, level, pageIndex, textOffset}]
+  bookmarks: [],            // 书签 [{id, name, page, time, snippet}]
+  nightMode: false,
+  fullscreen: false,
+  searchOpen: false,
+  settingsOpen: false,
+  sidebarOpen: null,        // 'toc' | 'bookmark' | 'bookshelf' | null
+  autoScrolling: false,
+  autoScrollSpeed: 2,
+  autoScrollTimer: null,
+  layout: 'left',           // left | right
+  bgImage: null,
+  bgOpacity: 50,
+  pendingBookHash: null,
+  // 【新增】文件维度颜色设置（切换文件时独立保存/恢复）
+  fileColorSettings: {
+    fontColor: '#2C2C2C',
+    bgColor: '#F5F0E8',
+    bgOpacity: 100
+  },
+  // 【新增】夜间模式切换前的颜色快照（用于退出夜间模式时恢复）
+  preNightColors: null,
+  settings: {
+    fontSize: 18,
+    lineHeight: 1.8,
+    fontFamily: "'宋体', SimSun, serif",
+    fontColor: '#2C2C2C',
+    bgColor: '#F5F0E8',
+    contentWidth: 680,
+    encoding: 'auto'
+  }
+};
+
+// ========== 初始化 ==========
+function init() {
+  loadPreferences();
+  applyPreferences();
+  applyLayout();
+  bindEvents();
+  updateModeButtons();
+}
+
+function loadPreferences() {
+  const saved = lsGet('preferences', null);
+  if (saved) Object.assign(state.settings, saved);
+  state.nightMode = lsGet('nightMode', false);
+  state.layout = lsGet('layout', 'left');
+  state.readMode = lsGet('readMode', 'page');
+  state.bgImage = lsGet('bgImage', null);
+  state.bgOpacity = lsGet('bgOpacity', 50);
+}
+
+function savePreferences() {
+  lsSet('preferences', state.settings);
+  lsSet('nightMode', state.nightMode);
+  lsSet('layout', state.layout);
+  lsSet('readMode', state.readMode);
+  lsSet('bgImage', state.bgImage);
+  lsSet('bgOpacity', state.bgOpacity);
+}
+
+function applyPreferences() {
+  const root = document.documentElement;
+  root.style.setProperty('--font-size', state.settings.fontSize + 'px');
+  root.style.setProperty('--line-height', state.settings.lineHeight);
+  root.style.setProperty('--font-family', state.settings.fontFamily);
+  root.style.setProperty('--content-width', state.settings.contentWidth + 'px');
+
+  // 【修改】使用文件维度颜色设置
+  const fc = state.fileColorSettings.fontColor;
+  const bc = state.fileColorSettings.bgColor;
+  const bo = state.fileColorSettings.bgOpacity;
+
+  root.style.setProperty('--text-primary', fc);
+  // 【新增】辅助文字自动调整为比正文略浅的同色系
+  root.style.setProperty('--text-secondary', lightenColor(fc, 60));
+  root.style.setProperty('--text-muted', lightenColor(fc, 100));
+
+  if (!state.nightMode) {
+    // 【修改】应用背景色 + 透明度混合
+    const blendedBg = blendWithWhite(bc, bo);
+    root.style.setProperty('--bg-primary', blendedBg);
+    root.style.setProperty('--bg-secondary', adjustColor(blendedBg, -10));
+    root.style.setProperty('--navbar-bg', blendedBg + 'D9');
+  }
+
+  // 夜间模式
+  if (state.nightMode) {
+    document.body.classList.add('night-mode');
+    $('#btnNight').classList.add('active');
+  }
+
+  // 设置面板控件同步
+  $('#setFont').value = state.settings.fontFamily;
+  $('#setFontSize').value = state.settings.fontSize;
+  $('#fontSizeVal').textContent = state.settings.fontSize + 'px';
+  $('#setLineHeight').value = state.settings.lineHeight;
+  $('#lineHeightVal').textContent = state.settings.lineHeight;
+  $('#setContentWidth').value = state.settings.contentWidth;
+  $('#contentWidthVal').textContent = state.settings.contentWidth + 'px';
+  $('#setFontColor').value = fc;
+  $('#setBgColor').value = bc;
+  $('#setBgOpacity2').value = bo;
+  $('#setEncoding').value = state.settings.encoding;
+
+  // 【修改】同步字体颜色预设色块高亮
+  syncColorPresetActive('#fontColorPresets', fc);
+  // 【修改】同步背景颜色预设色块高亮
+  syncColorPresetActive('#bgColorPresets', bc);
+
+  // 【兼容保留】旧背景预设高亮
+  $$('.bg-preset').forEach(el => {
+    el.classList.toggle('active', el.dataset.color === state.settings.bgColor);
+  });
+
+  // 布局选项
+  $$('.layout-option').forEach(el => {
+    el.classList.toggle('active', el.dataset.layout === state.layout);
+  });
+
+  // 【修改】恢复背景图片状态
+  if (state.bgImage) {
+    $('#bgImageLayer').style.backgroundImage = `url(${state.bgImage})`;
+    $('#bgImageLayer').style.opacity = (100 - state.bgOpacity) / 100;
+    $('#bgOpacityRow').style.display = 'flex';
+    $('#setBgOpacity').value = state.bgOpacity;
+    $('#bgOpacityVal').textContent = state.bgOpacity + '%';
+  }
+
+  // 【新增】初始化搜索高亮对比度
+  updateSearchHighlightContrast();
+}
+
+// 【新增】同步颜色预设色块的 active 状态
+function syncColorPresetActive(containerSel, activeColor) {
+  const container = document.querySelector(containerSel);
+  if (!container) return;
+  container.querySelectorAll('.color-preset').forEach(el => {
+    el.classList.toggle('active', el.dataset.color.toUpperCase() === activeColor.toUpperCase());
+  });
+}
+
+// 【新增】将颜色与白色按透明度混合（opacity: 100=原色, 10=接近白色）
+function blendWithWhite(hex, opacityPercent) {
+  hex = hex.replace('#', '');
+  const alpha = Math.max(0.1, opacityPercent / 100);
+  let r = parseInt(hex.substring(0, 2), 16);
+  let g = parseInt(hex.substring(2, 4), 16);
+  let b = parseInt(hex.substring(4, 6), 16);
+  r = Math.round(r * alpha + 255 * (1 - alpha));
+  g = Math.round(g * alpha + 255 * (1 - alpha));
+  b = Math.round(b * alpha + 255 * (1 - alpha));
+  return '#' + [r, g, b].map(c => Math.max(0, Math.min(255, c)).toString(16).padStart(2, '0')).join('');
+}
+
+// 【新增】将颜色变浅（用于辅助文字）
+function lightenColor(hex, amount) {
+  hex = hex.replace('#', '');
+  let r = Math.min(255, parseInt(hex.substring(0, 2), 16) + amount);
+  let g = Math.min(255, parseInt(hex.substring(2, 4), 16) + amount);
+  let b = Math.min(255, parseInt(hex.substring(4, 6), 16) + amount);
+  return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
+}
+
+function adjustColor(hex, amount) {
+  hex = hex.replace('#', '');
+  let r = Math.max(0, Math.min(255, parseInt(hex.substring(0, 2), 16) + amount));
+  let g = Math.max(0, Math.min(255, parseInt(hex.substring(2, 4), 16) + amount));
+  let b = Math.max(0, Math.min(255, parseInt(hex.substring(4, 6), 16) + amount));
+  return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
+}
+
+function applyLayout() {
+  const isRight = state.layout === 'right';
+  // 侧边栏方向
+  ['tocSidebar', 'bookmarkSidebar', 'bookshelfSidebar'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.toggle('right-layout', isRight);
+  });
+  // 设置面板方向
+  $('#settingsPanel').classList.toggle('right-layout', isRight);
+  // 顶栏按钮位置
+  const leftContainer = $('#topbarLeft');
+  const rightContainer = $('.topbar-right');
+  // 移动功能按钮
+  const funcBtns = leftContainer.querySelectorAll('.func-btn');
+  funcBtns.forEach(btn => {
+    if (isRight) {
+      rightContainer.insertBefore(btn, rightContainer.firstChild);
+    } else {
+      leftContainer.appendChild(btn);
+    }
+  });
+}
+
+// ========== 事件绑定 ==========
+function bindEvents() {
+  // 文件打开 - 【修复】确保事件正确绑定
+  $('#btnOpenFile').addEventListener('click', () => {
+    state.pendingBookHash = null; // 清除待打开标记
+    $('#fileInput').click();
+  });
+  $('#fileInput').addEventListener('change', handleFileSelect);
+
+  // 拖拽
+  document.addEventListener('dragover', (e) => { e.preventDefault(); $('#dropOverlay').classList.add('visible'); });
+  document.addEventListener('dragleave', (e) => {
+    if (e.relatedTarget === null || !document.contains(e.relatedTarget)) {
+      $('#dropOverlay').classList.remove('visible');
+    }
+  });
+  document.addEventListener('drop', (e) => {
+    e.preventDefault();
+    $('#dropOverlay').classList.remove('visible');
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      if (state.sidebarOpen === 'bookshelf') {
+        addFilesToBookshelf(files);
+      } else {
+        state.pendingBookHash = null;
+        loadFile(files[0]);
+      }
+    }
+  });
+
+  // 模式切换
+  $$('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchReadMode(btn.dataset.mode));
+  });
+
+  // 搜索
+  $('#btnSearch').addEventListener('click', toggleSearch);
+  $('#searchClose').addEventListener('click', closeSearch);
+  $('#searchNext').addEventListener('click', () => navigateSearch(1));
+  $('#searchPrev').addEventListener('click', () => navigateSearch(-1));
+  $('#searchInput').addEventListener('input', performSearch);
+  $('#searchCaseSensitive').addEventListener('change', performSearch);
+  $('#searchWholeWord').addEventListener('change', performSearch);
+
+  // 书签
+  $('#btnBookmark').addEventListener('click', toggleBookmark);
+
+  // 设置
+  $('#btnSettings').addEventListener('click', toggleSettings);
+  // 设置项变更
+  $('#setFont').addEventListener('change', (e) => { state.settings.fontFamily = e.target.value; applyPreferences(); savePreferences(); });
+  $('#setFontSize').addEventListener('input', (e) => { state.settings.fontSize = parseInt(e.target.value); applyPreferences(); savePreferences(); });
+  $('#setLineHeight').addEventListener('input', (e) => { state.settings.lineHeight = parseFloat(e.target.value); applyPreferences(); savePreferences(); });
+  $('#setContentWidth').addEventListener('input', (e) => { state.settings.contentWidth = parseInt(e.target.value); applyPreferences(); savePreferences(); });
+  $('#setFontColor').addEventListener('input', (e) => {
+    state.fileColorSettings.fontColor = e.target.value;
+    applyPreferences();
+    saveFileColorSettings();
+    updateSearchHighlightContrast();
+  });
+  $('#setEncoding').addEventListener('change', (e) => { state.settings.encoding = e.target.value; });
+
+  // 【修改】字体颜色预设色块点击
+  $$('#fontColorPresets .color-preset').forEach(el => {
+    el.addEventListener('click', () => {
+      state.fileColorSettings.fontColor = el.dataset.color;
+      applyPreferences();
+      saveFileColorSettings();
+      updateSearchHighlightContrast();
+    });
+  });
+
+  // 【修改】背景颜色预设色块点击（替代旧的 .bg-preset）
+  $$('#bgColorPresets .color-preset').forEach(el => {
+    el.addEventListener('click', () => {
+      state.fileColorSettings.bgColor = el.dataset.color;
+      applyPreferences();
+      saveFileColorSettings();
+    });
+  });
+
+  // 【新增】背景颜色自定义取色器
+  $('#setBgColor').addEventListener('input', (e) => {
+    state.fileColorSettings.bgColor = e.target.value;
+    applyPreferences();
+    saveFileColorSettings();
+  });
+
+  // 【新增】背景透明度滑块
+  $('#setBgOpacity2').addEventListener('input', (e) => {
+    state.fileColorSettings.bgOpacity = parseInt(e.target.value);
+    applyPreferences();
+    saveFileColorSettings();
+  });
+
+  // 【兼容保留】旧背景预设（保留以防遗漏引用）
+  $$('.bg-preset').forEach(el => {
+    el.addEventListener('click', () => {
+      state.fileColorSettings.bgColor = el.dataset.color;
+      $$('.bg-preset').forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+      applyPreferences();
+      saveFileColorSettings();
+    });
+  });
+
+  // 背景图片上传
+  $('#btnUploadBg').addEventListener('click', () => $('#bgFileInput').click());
+  $('#bgFileInput').addEventListener('change', handleBgImageUpload);
+  $('#setBgOpacity').addEventListener('input', (e) => {
+    state.bgOpacity = parseInt(e.target.value);
+    $('#bgOpacityVal').textContent = state.bgOpacity + '%';
+    $('#bgImageLayer').style.opacity = (100 - state.bgOpacity) / 100;
+    savePreferences();
+  });
+
+  // 布局
+  $$('.layout-option').forEach(el => {
+    el.addEventListener('click', () => {
+      state.layout = el.dataset.layout;
+      $$('.layout-option').forEach(o => o.classList.remove('active'));
+      el.classList.add('active');
+      applyLayout();
+      savePreferences();
+    });
+  });
+
+  // 夜间模式
+  $('#btnNight').addEventListener('click', toggleNightMode);
+
+  // 全屏
+  $('#btnFullscreen').addEventListener('click', toggleFullscreen);
+
+  // 侧边栏
+  $('#sidebarOverlay').addEventListener('click', closeAllSidebars);
+
+  // 自动滚动
+  $('#autoScrollSlower').addEventListener('click', () => changeAutoScrollSpeed(-0.5));
+  $('#autoScrollFaster').addEventListener('click', () => changeAutoScrollSpeed(0.5));
+  $('#autoScrollToggle').addEventListener('click', toggleAutoScroll);
+
+  // 书架
+  $('#addBookBtn').addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.txt,.text,.pdf'; input.multiple = true;
+    input.addEventListener('change', () => {
+      addFilesToBookshelf(Array.from(input.files));
+    });
+    input.click();
+  });
+
+  // 键盘快捷键
+  document.addEventListener('keydown', handleKeyboard);
+
+  // 点击空白区域
+  document.addEventListener('click', handleBlankClick);
+
+  // 滚动事件（滚动模式）
+  $('#readerContent').addEventListener('scroll', handleScroll);
+
+  // 全屏变化
+  document.addEventListener('fullscreenchange', () => {
+    state.fullscreen = !!document.fullscreenElement;
+    $('#readerContainer').classList.toggle('fullscreen-mode', state.fullscreen);
+    $('#btnFullscreen').classList.toggle('active', state.fullscreen);
+  });
+
+  // 创建功能按钮
+  createFuncButtons();
+}
+
+// ========== 功能按钮（目录/书架/书签）==========
+function createFuncButtons() {
+  const container = $('#topbarLeft');
+  container.innerHTML = '';
+
+  const buttons = [
+    { id: 'btnToc', title: '目录', icon: '<svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>' },
+    { id: 'btnBookshelf', title: '书架', icon: '<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>' },
+    { id: 'btnBookmarkList', title: '书签列表', icon: '<svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>' }
+  ];
+
+  buttons.forEach(b => {
+    const btn = document.createElement('button');
+    btn.className = 'icon-btn func-btn';
+    btn.id = b.id;
+    btn.title = b.title;
+    btn.innerHTML = b.icon;
+    btn.addEventListener('click', () => {
+      if (b.id === 'btnToc') toggleSidebar('toc');
+      else if (b.id === 'btnBookshelf') toggleSidebar('bookshelf');
+      else if (b.id === 'btnBookmarkList') toggleSidebar('bookmark');
+    });
+    container.appendChild(btn);
+  });
+
+  applyLayout();
+}
+
+// ========== 文件处理 ==========
+
+// 【修复】处理文件选择事件
+async function handleFileSelect(e) {
+  const files = Array.from(e.target.files);
+  if (files.length === 0) return;
+  
+  // 【修复】如果是在书架面板中点击添加书籍
+  if (state.sidebarOpen === 'bookshelf' && !state.pendingBookHash) {
+    addFilesToBookshelf(files);
+    e.target.value = '';
+    return;
+  }
+  
+  // 【修复】检查是否是书架点击后触发的文件选择
+  const file = files[0];
+  const fileHash = simpleHash(file.name + file.size);
+  
+  // 如果有待打开的书籍哈希，验证是否匹配
+  if (state.pendingBookHash && state.pendingBookHash !== fileHash) {
+    showToast('文件不匹配，请选择与书架中对应的文件');
+    state.pendingBookHash = null;
+    e.target.value = '';
+    return;
+  }
+  
+  await loadFile(file);
+  e.target.value = '';
+  state.pendingBookHash = null;
+}
+
+// 【修复】主文件加载函数
+async function loadFile(file) {
+  const hash = simpleHash(file.name + file.size);
+  const fileInfo = { name: file.name, size: file.size, hash, type: file.name.endsWith('.pdf') ? 'pdf' : 'txt' };
+
+  if (fileInfo.type === 'pdf') {
+    showToast('PDF 支持需要 pdf.js，当前以文本方式尝试读取');
+  }
+
+  let text;
+  try {
+    const buffer = await file.arrayBuffer();
+    const encoding = state.settings.encoding === 'auto' ? detectEncoding(buffer) : state.settings.encoding;
+    text = decodeBuffer(buffer, encoding);
+    fileInfo.text = text;
+  } catch (err) {
+    showToast('文件读取失败: ' + err.message);
+    console.error('文件读取错误:', err);
+    return;
+  }
+
+  // 【修复】设置当前文件
+  state.currentFile = fileInfo;
+  $('#fileName').textContent = file.name;
+
+  // 【修复】加载该文件的进度和书签
+  loadFileData(hash);
+
+  // 【新增】加载该文件的颜色设置（按文件维度独立存储）
+  loadFileColorSettings(hash);
+
+  // 【修复】处理文本
+  processText(text);
+
+  // 【修复】生成目录
+  generateTOC(text);
+
+  // 【修复】渲染内容
+  renderContent();
+
+  // 【修复】恢复进度
+  restoreProgress();
+
+  // 【修复】更新书架
+  updateBookshelfEntry(fileInfo);
+
+  // 【修复】关闭面板
+  closeAllSidebars();
+  closeSearch();
+  closeSettings();
+
+  showToast('已打开: ' + file.name);
+}
+
+function processText(text) {
+  // 统一换行符
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  // 按段落分割
+  let paragraphs = text.split(/\n+/).filter(p => p.trim());
+  // 如果全部是空白，至少保留一个空段落以避免崩溃
+  if (paragraphs.length === 0) {
+    paragraphs = [text.trim() || '(空白内容)'];
+  }
+  state.rawParagraphs = paragraphs;
+  state.fullText = text;
+}
+
+function renderContent() {
+  const wrapper = $('#contentWrapper');
+  wrapper.innerHTML = '';
+
+  if (state.readMode === 'page') {
+    wrapper.className = 'content-wrapper page-mode';
+    paginateContent();
+    state.pages.forEach((pageText, i) => {
+      const div = document.createElement('div');
+      div.className = 'page-content' + (i === state.currentPage ? ' active' : '');
+      div.dataset.page = i;
+      div.innerHTML = pageText;
+      wrapper.appendChild(div);
+    });
+    updateStatus();
+  } else {
+    wrapper.className = 'content-wrapper scroll-mode';
+    const div = document.createElement('div');
+    div.className = 'page-content active';
+    div.innerHTML = state.rawParagraphs.map(p => `<p class="para">${escapeHtml(p)}</p>`).join('');
+    wrapper.appendChild(div);
+    // 恢复滚动位置
+    const scrollPos = lsGet('scroll_' + state.currentFile.hash, 0);
+    setTimeout(() => {
+      $('#readerContent').scrollTop = scrollPos * $('#readerContent').scrollHeight;
+    }, 50);
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ========== 分页 ==========
+function paginateContent() {
+  const wrapper = $('#contentWrapper');
+  const contentEl = $('#readerContent');
+  
+  // 计算可用高度，确保为正数
+  const totalHeight = contentEl.clientHeight || (window.innerHeight - 40 - 32);
+  const containerHeight = Math.max(200, totalHeight - 48); // 减去上下 padding，最小200px
+  
+  // 临时渲染全部文本以测量
+  wrapper.innerHTML = '';
+  const tempDiv = document.createElement('div');
+  tempDiv.className = 'page-content active';
+  tempDiv.style.cssText = 'visibility:hidden;position:absolute;width:' + ($('#contentWrapper').offsetWidth || 680) + 'px;';
+  tempDiv.innerHTML = state.rawParagraphs.map(p => `<p class="para">${escapeHtml(p)}</p>`).join('');
+  document.body.appendChild(tempDiv);
+  
+  const pages = [];
+  let currentPage = [];
+  const paras = tempDiv.querySelectorAll('.para');
+  
+  paras.forEach(p => {
+    currentPage.push(p.outerHTML);
+    const tempPage = document.createElement('div');
+    tempPage.style.cssText = 'visibility:hidden;position:absolute;width:' + ($('#contentWrapper').offsetWidth || 680) + 'px;';
+    tempPage.innerHTML = currentPage.join('');
+    document.body.appendChild(tempPage);
+    if (tempPage.offsetHeight > containerHeight && currentPage.length > 1) {
+      currentPage.pop();
+      pages.push(currentPage.join(''));
+      currentPage = [p.outerHTML];
+    }
+    document.body.removeChild(tempPage);
+  });
+  if (currentPage.length > 0) pages.push(currentPage.join(''));
+  
+  // 清理临时元素
+  if (document.body.contains(tempDiv)) {
+    document.body.removeChild(tempDiv);
+  }
+  
+  state.pages = pages;
+  state.totalPages = pages.length;
+  if (state.currentPage >= state.totalPages) state.currentPage = state.totalPages - 1;
+  if (state.currentPage < 0) state.currentPage = 0;
+}
+
+// ========== 阅读模式切换 ==========
+function switchReadMode(mode) {
+  state.readMode = mode;
+  savePreferences();
+  updateModeButtons();
+
+  if (mode === 'auto') {
+    startAutoScroll();
+  } else {
+    stopAutoScroll();
+  }
+
+  if (state.currentFile) {
+    // 保存当前进度
+    saveProgress();
+    renderContent();
+    restoreProgress();
+  }
+}
+
+function updateModeButtons() {
+  $$('.mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === state.readMode);
+  });
+  $('#autoscrollIndicator').classList.toggle('visible', state.readMode === 'auto');
+  // 【新增】移动端浮动翻页箭头仅在分页模式下显示
+  const isMobile = window.innerWidth < 768;
+  const nav = $('#mobilePageNav');
+  const capsule = $('#mobilePageCapsule');
+  if (nav) nav.style.display = (isMobile && state.readMode === 'page') ? 'flex' : 'none';
+  if (capsule) capsule.style.display = (isMobile && state.readMode === 'page') ? 'flex' : 'none';
+}
+
+// ========== 状态栏更新 ==========
+function updateStatus() {
+  if (!state.currentFile) {
+    $('#statusInfo').textContent = '-- / --';
+    $('#statusPercent').textContent = '--%';
+    return;
+  }
+  if (state.readMode === 'page') {
+    $('#statusInfo').textContent = `${state.currentPage + 1} / ${state.totalPages}`;
+    const pct = state.totalPages > 0 ? Math.round(((state.currentPage + 1) / state.totalPages) * 100) : 0;
+    $('#statusPercent').textContent = pct + '%';
+  } else {
+    const el = $('#readerContent');
+    const pct = el.scrollHeight > el.clientHeight ? Math.round((el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100) : 100;
+    $('#statusInfo').textContent = '';
+    $('#statusPercent').textContent = pct + '%';
+  }
+}
+
+// ========== 翻页 ==========
+function goToPage(pageIndex) {
+  if (pageIndex < 0) pageIndex = 0;
+  if (pageIndex >= state.totalPages) pageIndex = state.totalPages - 1;
+  state.currentPage = pageIndex;
+
+  $$('.page-content').forEach((el, i) => {
+    el.classList.toggle('active', i === pageIndex);
+  });
+  updateStatus();
+  saveProgress();
+  updateBookmarkIcon();
+  updateCurrentTOC();
+}
+
+function prevPage() { goToPage(state.currentPage - 1); }
+function nextPage() { goToPage(state.currentPage + 1); }
+
+// ========== 滚动处理 ==========
+function handleScroll() {
+  if (state.readMode !== 'page' && state.readMode !== 'auto') {
+    updateStatus();
+  }
+  // 节流保存滚动进度
+  clearTimeout(handleScroll._timer);
+  handleScroll._timer = setTimeout(() => {
+    if (state.currentFile && state.readMode !== 'page') {
+      const el = $('#readerContent');
+      const pct = el.scrollHeight > el.clientHeight ? el.scrollTop / (el.scrollHeight - el.clientHeight) : 0;
+      lsSet('scroll_' + state.currentFile.hash, pct);
+    }
+  }, 500);
+}
+
+// ========== 自动滚动 ==========
+function startAutoScroll() {
+  state.autoScrolling = true;
+  $('#autoScrollToggle').textContent = '⏸';
+  doAutoScroll();
+}
+
+function stopAutoScroll() {
+  state.autoScrolling = false;
+  $('#autoScrollToggle').textContent = '▶';
+  if (state.autoScrollTimer) {
+    cancelAnimationFrame(state.autoScrollTimer);
+    state.autoScrollTimer = null;
+  }
+}
+
+function toggleAutoScroll() {
+  if (state.autoScrolling) stopAutoScroll();
+  else startAutoScroll();
+}
+
+function doAutoScroll() {
+  if (!state.autoScrolling) return;
+  const el = $('#readerContent');
+  el.scrollTop += state.autoScrollSpeed * 0.5;
+  if (el.scrollTop >= el.scrollHeight - el.clientHeight) {
+    stopAutoScroll();
+    return;
+  }
+  state.autoScrollTimer = requestAnimationFrame(doAutoScroll);
+}
+
+function changeAutoScrollSpeed(delta) {
+  state.autoScrollSpeed = Math.max(0.5, Math.min(10, state.autoScrollSpeed + delta));
+  $('#autoScrollSpeed').textContent = state.autoScrollSpeed;
+}
+
+// ========== 搜索 ==========
+function toggleSearch() {
+  state.searchOpen = !state.searchOpen;
+  $('#searchBar').classList.toggle('visible', state.searchOpen);
+  if (state.searchOpen) {
+    $('#searchInput').focus();
+  } else {
+    closeSearch();
+  }
+}
+
+function closeSearch() {
+  state.searchOpen = false;
+  $('#searchBar').classList.remove('visible');
+  clearHighlights();
+  state.searchMatches = [];
+  state.searchCurrentIndex = -1;
+  $('#searchInfo').textContent = '';
+  $('#searchInput').value = '';
+}
+
+function performSearch() {
+  clearHighlights();
+  const query = $('#searchInput').value.trim();
+  if (!query || !state.currentFile) {
+    state.searchMatches = [];
+    state.searchCurrentIndex = -1;
+    $('#searchInfo').textContent = '';
+    return;
+  }
+
+  const caseSensitive = $('#searchCaseSensitive').checked;
+  const wholeWord = $('#searchWholeWord').checked;
+
+  // 构建正则
+  let pattern = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (wholeWord) pattern = `\\b${pattern}\\b`;
+  const flags = caseSensitive ? 'g' : 'gi';
+  const regex = new RegExp(pattern, flags);
+
+  // 在当前页或全部文本中搜索
+  state.searchMatches = [];
+  state.searchCurrentIndex = -1;
+
+  // 在所有可见内容中搜索
+  const contentEls = $$('.page-content.active, .scroll-mode .page-content');
+  contentEls.forEach(el => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+    const textNodes = [];
+    while (walker.nextNode()) textNodes.push(walker.currentNode);
+
+    textNodes.forEach(node => {
+      const text = node.textContent;
+      let match;
+      regex.lastIndex = 0;
+      while ((match = regex.exec(text)) !== null) {
+        state.searchMatches.push({ node, index: match.index, length: match[0].length });
+      }
+    });
+  });
+
+  if (state.searchMatches.length > 0) {
+    state.searchCurrentIndex = 0;
+    highlightMatches();
+    $('#searchInfo').textContent = `第 1 / 共 ${state.searchMatches.length} 个`;
+  } else {
+    // 尝试翻页查找
+    if (state.readMode === 'page') {
+      let found = false;
+      for (let i = 0; i < state.totalPages; i++) {
+        if (i === state.currentPage) continue;
+        const pageText = state.pages[i] || '';
+        const testRegex = new RegExp(pattern, flags);
+        if (testRegex.test(pageText)) {
+          goToPage(i);
+          setTimeout(() => performSearch(), 100);
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        $('#searchInfo').textContent = '无匹配';
+      }
+    } else {
+      $('#searchInfo').textContent = '无匹配';
+    }
+  }
+}
+
+function highlightMatches() {
+  clearHighlights();
+  if (state.searchMatches.length === 0) return;
+
+  // 按节点分组，从后往前替换避免偏移
+  const byNode = new Map();
+  state.searchMatches.forEach((m, idx) => {
+    if (!byNode.has(m.node)) byNode.set(m.node, []);
+    byNode.get(m.node).push({ ...m, globalIdx: idx });
+  });
+
+  byNode.forEach((matches, node) => {
+    // 从后往前处理
+    matches.sort((a, b) => b.index - a.index);
+    const parent = node.parentNode;
+    matches.forEach(m => {
+      const range = document.createRange();
+      range.setStart(node, m.index);
+      range.setEnd(node, m.index + m.length);
+      const span = document.createElement('span');
+      span.className = 'search-highlight' + (m.globalIdx === state.searchCurrentIndex ? ' current' : '');
+      range.surroundContents(span);
+    });
+  });
+
+  // 滚动到当前匹配
+  const current = document.querySelector('.search-highlight.current');
+  if (current) current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function clearHighlights() {
+  $$('.search-highlight').forEach(el => {
+    const parent = el.parentNode;
+    parent.replaceChild(document.createTextNode(el.textContent), el);
+    parent.normalize();
+  });
+}
+
+function navigateSearch(direction) {
+  if (state.searchMatches.length === 0) return;
+  state.searchCurrentIndex += direction;
+  if (state.searchCurrentIndex < 0) state.searchCurrentIndex = state.searchMatches.length - 1;
+  if (state.searchCurrentIndex >= state.searchMatches.length) state.searchCurrentIndex = 0;
+  highlightMatches();
+  $('#searchInfo').textContent = `第 ${state.searchCurrentIndex + 1} / 共 ${state.searchMatches.length} 个`;
+}
+
+// ========== 书签 ==========
+function getFileBookmarksKey() {
+  return state.currentFile ? 'bookmarks_' + state.currentFile.hash : null;
+}
+
+function loadFileData(hash) {
+  state.bookmarks = lsGet('bookmarks_' + hash, []);
+  state.currentPage = lsGet('page_' + hash, 0);
+}
+
+// 【新增】按文件维度加载颜色设置
+function loadFileColorSettings(hash) {
+  const saved = lsGet('colors_' + hash, null);
+  if (saved) {
+    state.fileColorSettings = { ...saved };
+  } else {
+    // 新文件使用默认配色
+    state.fileColorSettings = {
+      fontColor: '#2C2C2C',
+      bgColor: '#F5F0E8',
+      bgOpacity: 100
+    };
+  }
+  // 如果当前处于夜间模式，保存用户自定义颜色但不立即应用
+  if (!state.nightMode) {
+    applyPreferences();
+  }
+}
+
+// 【新增】保存当前文件的颜色设置
+function saveFileColorSettings() {
+  if (!state.currentFile) return;
+  lsSet('colors_' + state.currentFile.hash, { ...state.fileColorSettings });
+  // 同步到全局设置（用于非文件维度场景）
+  state.settings.fontColor = state.fileColorSettings.fontColor;
+  state.settings.bgColor = state.fileColorSettings.bgColor;
+  savePreferences();
+}
+
+function toggleBookmark() {
+  if (!state.currentFile) { showToast('请先打开文件'); return; }
+
+  const page = state.readMode === 'page' ? state.currentPage : 0;
+  const existingIdx = state.bookmarks.findIndex(b => b.page === page);
+
+  if (existingIdx >= 0) {
+    if (confirm('删除此书签？')) {
+      state.bookmarks.splice(existingIdx, 1);
+      saveBookmarks();
+      showToast('书签已删除');
+    }
+  } else {
+    // 获取当前页首句
+    let snippet = '';
+    if (state.readMode === 'page' && state.pages[page]) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = state.pages[page];
+      snippet = tmp.textContent.substring(0, 50);
+    } else {
+      const el = $('.page-content.active');
+      if (el) snippet = el.textContent.substring(0, 50);
+    }
+    const name = snippet.replace(/\s+/g, ' ').trim() || `第 ${page + 1} 页`;
+    state.bookmarks.push({
+      id: Date.now(),
+      name,
+      page,
+      time: Date.now(),
+      snippet
+    });
+    saveBookmarks();
+    showToast('书签已添加');
+  }
+  updateBookmarkIcon();
+  if (state.sidebarOpen === 'bookmark') renderBookmarkList();
+}
+
+function saveBookmarks() {
+  if (!state.currentFile) return;
+  lsSet('bookmarks_' + state.currentFile.hash, state.bookmarks);
+}
+
+function updateBookmarkIcon() {
+  if (!state.currentFile) return;
+  const page = state.readMode === 'page' ? state.currentPage : 0;
+  const hasBookmark = state.bookmarks.some(b => b.page === page);
+  $('#btnBookmark').classList.toggle('active', hasBookmark);
+  // 实心/空心图标
+  const svg = $('#btnBookmark svg path');
+  if (svg) {
+    if (hasBookmark) {
+      svg.style.fill = 'currentColor';
+    } else {
+      svg.style.fill = 'none';
+    }
+  }
+}
+
+function renderBookmarkList() {
+  const list = $('#bookmarkList');
+  if (state.bookmarks.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:14px;">暂无书签</div>';
+    return;
+  }
+  list.innerHTML = state.bookmarks.map(b => `
+    <div class="bookmark-item" data-page="${b.page}">
+      <button class="bm-delete" data-id="${b.id}" title="删除">✕</button>
+      <div class="bm-name">${escapeHtml(b.name)}</div>
+      <div class="bm-meta">
+        <span>第 ${b.page + 1} 页</span>
+        <span>${formatTime(b.time)}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(b.snippet)}</div>
+    </div>
+  `).join('');
+
+  // 事件
+  list.querySelectorAll('.bookmark-item').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('bm-delete')) {
+        const id = parseInt(e.target.dataset.id);
+        state.bookmarks = state.bookmarks.filter(b => b.id !== id);
+        saveBookmarks();
+        renderBookmarkList();
+        updateBookmarkIcon();
+        showToast('书签已删除');
+        return;
+      }
+      const page = parseInt(el.dataset.page);
+      goToPage(page);
+      closeAllSidebars();
+    });
+  });
+}
+
+// ========== 目录 ==========
+function generateTOC(text) {
+  state.toc = [];
+  const lines = text.split('\n');
+  const patterns = [
+    { regex: /^(第[零一二三四五六七八九十百千万\d]+[章节回卷集部篇])/g, level: 0 },
+    { regex: /^(\d{1,4}[.、]\s*\d{0,2}[.、]?\s*\d{0,2}[.、]?\s*.+)/g, level: 1 },
+    { regex: /^(前言|引言|序[言章]?|楔子|尾声|后记|附录|番外|引子|代序|自序|编者按)/g, level: 0 },
+    { regex: /^(Chapter\s+\d+|CHAPTER\s+\d+)/gi, level: 0 },
+    { regex: /^(卷[零一二三四五六七八九十百千万\d]+|VOL\.\s*\d+)/gi, level: 0 }
+  ];
+
+  let paraIndex = 0;
+  lines.forEach((line, lineIdx) => {
+    const trimmed = line.trim();
+    if (!trimmed) return;
+    for (const p of patterns) {
+      p.regex.lastIndex = 0;
+      if (p.regex.test(trimmed)) {
+        // 计算段落索引
+        const pageIndex = estimatePageIndex(paraIndex);
+        state.toc.push({
+          title: trimmed,
+          level: p.level,
+          pageIndex,
+          paraIndex,
+          lineIndex: lineIdx
+        });
+        break;
+      }
+    }
+    paraIndex++;
+  });
+}
+
+function estimatePageIndex(paraIndex) {
+  // 粗略估算：基于段落总数和每页大概段落数
+  if (state.totalPages > 0) {
+    const parasPerPage = state.rawParagraphs.length / state.totalPages;
+    return Math.min(Math.floor(paraIndex / Math.max(1, parasPerPage)), state.totalPages - 1);
+  }
+  return 0;
+}
+
+function renderTOC() {
+  const list = $('#tocList');
+  if (state.toc.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:14px;">未检测到目录</div>';
+    return;
+  }
+  list.innerHTML = state.toc.map((item, i) => `
+    <div class="toc-item indent-${item.level}" data-index="${i}" data-page="${item.pageIndex}" data-para="${item.paraIndex}">
+      <span class="toc-level">${item.level === 0 ? '●' : '○'}</span>
+      <span>${escapeHtml(item.title)}</span>
+    </div>
+  `).join('');
+
+  list.querySelectorAll('.toc-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const page = parseInt(el.dataset.page);
+      if (state.readMode === 'page') {
+        goToPage(page);
+      } else {
+        // 滚动到对应段落
+        const paraIdx = parseInt(el.dataset.para);
+        const paras = $$('.page-content .para');
+        if (paras[paraIdx]) {
+          paras[paraIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+      closeAllSidebars();
+    });
+  });
+
+  updateCurrentTOC();
+}
+
+function updateCurrentTOC() {
+  if (state.toc.length === 0) return;
+  const currentPara = state.readMode === 'page'
+    ? estimateCurrentPara(state.currentPage)
+    : estimateCurrentParaFromScroll();
+
+  let currentIdx = 0;
+  for (let i = state.toc.length - 1; i >= 0; i--) {
+    if (state.toc[i].paraIndex <= currentPara) {
+      currentIdx = i;
+      break;
+    }
+  }
+  $$('.toc-item').forEach((el, i) => {
+    el.classList.toggle('current', i === currentIdx);
+  });
+}
+
+function estimateCurrentPara(pageIndex) {
+  if (state.totalPages <= 0 || !state.rawParagraphs) return 0;
+  const parasPerPage = state.rawParagraphs.length / state.totalPages;
+  return Math.floor(pageIndex * parasPerPage);
+}
+
+function estimateCurrentParaFromScroll() {
+  const el = $('#readerContent');
+  const paras = $$('.page-content .para');
+  if (paras.length === 0) return 0;
+  const scrollRatio = el.scrollTop / (el.scrollHeight - el.clientHeight || 1);
+  return Math.floor(scrollRatio * paras.length);
+}
+
+// ========== 书架 ==========
+function getBookshelf() {
+  return lsGet('bookshelf', []);
+}
+
+function saveBookshelf(shelf) {
+  lsSet('bookshelf', shelf);
+}
+
+function addFilesToBookshelf(files) {
+  const shelf = getBookshelf();
+  let added = 0;
+  files.forEach(file => {
+    const hash = simpleHash(file.name + file.size);
+    if (!shelf.find(b => b.hash === hash)) {
+      shelf.push({
+        name: file.name,
+        size: file.size,
+        hash,
+        lastRead: null,
+        progress: 0
+      });
+      added++;
+    }
+  });
+  saveBookshelf(shelf);
+  renderBookshelf();
+  showToast(`已添加 ${added} 本书籍`);
+}
+
+function updateBookshelfEntry(fileInfo) {
+  const shelf = getBookshelf();
+  const entry = shelf.find(b => b.hash === fileInfo.hash);
+  if (entry) {
+    entry.lastRead = Date.now();
+    entry.progress = state.readMode === 'page'
+      ? (state.totalPages > 0 ? (state.currentPage + 1) / state.totalPages : 0)
+      : 0;
+    saveBookshelf(shelf);
+  } else {
+    shelf.push({
+      name: fileInfo.name,
+      size: fileInfo.size,
+      hash: fileInfo.hash,
+      lastRead: Date.now(),
+      progress: state.totalPages > 0 ? (state.currentPage + 1) / state.totalPages : 0
+    });
+    saveBookshelf(shelf);
+  }
+}
+
+// 【修复】书架渲染和点击事件
+function renderBookshelf() {
+  const shelf = getBookshelf();
+  const list = $('#bookshelfList');
+  if (shelf.length === 0) {
+    list.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:40px 0;font-size:14px;">书架空空如也<br>点击 + 添加书籍</div>';
+    return;
+  }
+  list.innerHTML = shelf.map((book, i) => `
+    <div class="bookshelf-item" data-index="${i}" data-hash="${book.hash}" data-name="${escapeHtml(book.name)}">
+      <div class="bs-name">${escapeHtml(book.name)}</div>
+      <div class="bs-meta">
+        <span>${formatSize(book.size)}</span>
+        <span>${book.lastRead ? formatTime(book.lastRead) : '未阅读'}</span>
+      </div>
+      <div class="bs-progress"><div class="bs-progress-bar" style="width:${Math.round(book.progress * 100)}%"></div></div>
+      <button class="bs-delete" data-index="${i}">删除</button>
+    </div>
+  `).join('');
+
+  // 【修复】点击打开书籍 - 触发文件选择器
+  list.querySelectorAll('.bookshelf-item').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.classList.contains('bs-delete')) return;
+      
+      // 【修复】获取书籍信息并触发文件选择
+      const bookHash = el.dataset.hash;
+      const bookName = el.dataset.name;
+      
+      // 设置待打开的书籍哈希
+      state.pendingBookHash = bookHash;
+      
+      // 提示用户选择文件
+      showToast(`请选择文件: ${bookName}`, 3000);
+      
+      // 延迟触发文件选择器
+      setTimeout(() => {
+        $('#fileInput').click();
+      }, 500);
+    });
+  });
+
+  // 删除按钮
+  list.querySelectorAll('.bs-delete').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.index);
+      const shelf = getBookshelf();
+      const name = shelf[idx].name;
+      shelf.splice(idx, 1);
+      saveBookshelf(shelf);
+      renderBookshelf();
+      showToast(`已移除: ${name}`);
+    });
+  });
+
+  // 左滑删除
+  let touchStartX = 0;
+  list.querySelectorAll('.bookshelf-item').forEach(el => {
+    el.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+      el.classList.remove('swiped');
+    });
+    el.addEventListener('touchmove', (e) => {
+      const dx = e.touches[0].clientX - touchStartX;
+      if (dx < -40) el.classList.add('swiped');
+      else el.classList.remove('swiped');
+    });
+    el.addEventListener('touchend', () => {
+      setTimeout(() => el.classList.remove('swiped'), 2000);
+    });
+  });
+}
+
+// ========== 侧边栏 ==========
+function toggleSidebar(type) {
+  if (state.sidebarOpen === type) {
+    closeAllSidebars();
+    return;
+  }
+  closeAllSidebars();
+
+  state.sidebarOpen = type;
+  $('#sidebarOverlay').classList.add('visible');
+
+  const sidebarMap = { toc: 'tocSidebar', bookmark: 'bookmarkSidebar', bookshelf: 'bookshelfSidebar' };
+  const sidebar = document.getElementById(sidebarMap[type]);
+  if (sidebar) {
+    setTimeout(() => sidebar.classList.add('visible'), 10);
+  }
+
+  // 渲染内容
+  if (type === 'toc') renderTOC();
+  else if (type === 'bookmark') renderBookmarkList();
+  else if (type === 'bookshelf') renderBookshelf();
+}
+
+function closeAllSidebars() {
+  state.sidebarOpen = null;
+  $('#sidebarOverlay').classList.remove('visible');
+  ['tocSidebar', 'bookmarkSidebar', 'bookshelfSidebar'].forEach(id => {
+    document.getElementById(id).classList.remove('visible');
+  });
+}
+
+// ========== 设置面板 ==========
+function toggleSettings() {
+  state.settingsOpen = !state.settingsOpen;
+  $('#settingsPanel').classList.toggle('visible', state.settingsOpen);
+  if (state.settingsOpen) closeAllSidebars();
+}
+
+function closeSettings() {
+  state.settingsOpen = false;
+  $('#settingsPanel').classList.remove('visible');
+}
+
+// ========== 夜间模式 ==========
+function toggleNightMode() {
+  if (!state.nightMode) {
+    // 【修改】进入夜间模式前，保存当前用户自定义颜色快照
+    state.preNightColors = { ...state.fileColorSettings };
+  }
+  
+  state.nightMode = !state.nightMode;
+  document.body.classList.toggle('night-mode', state.nightMode);
+  $('#btnNight').classList.toggle('active', state.nightMode);
+
+  if (state.nightMode) {
+    // 【修改】夜间模式：强制纯黑背景+暖黄文字
+    document.documentElement.style.setProperty('--text-primary', '#D4C5A0');
+    document.documentElement.style.setProperty('--text-secondary', '#A89870');
+    document.documentElement.style.setProperty('--text-muted', '#776B55');
+    document.documentElement.style.setProperty('--bg-primary', '#1A1A1A');
+    document.documentElement.style.setProperty('--bg-secondary', '#242424');
+    document.documentElement.style.setProperty('--navbar-bg', 'rgba(26,26,26,0.9)');
+  } else {
+    // 【修改】退出夜间模式：恢复用户自定义颜色
+    if (state.preNightColors) {
+      state.fileColorSettings = { ...state.preNightColors };
+      state.preNightColors = null;
+    }
+    applyPreferences();
+  }
+  savePreferences();
+}
+
+// 【新增】根据字体颜色自动调整搜索高亮对比度
+function updateSearchHighlightContrast() {
+  const fc = state.fileColorSettings.fontColor.toUpperCase();
+  const root = document.documentElement;
+  
+  // 如果字体颜色接近黄色（与高亮冲突），调整高亮色
+  const isYellowish = isColorClose(fc, '#FFEB3B') || isColorClose(fc, '#FFC107') || isColorClose(fc, '#FFD700');
+  const isOrangish = isColorClose(fc, '#FF9800') || isColorClose(fc, '#FF5722');
+  
+  if (isYellowish) {
+    // 字体为黄色系 → 高亮改为蓝绿色系
+    root.style.setProperty('--highlight', '#26C6DA');
+    root.style.setProperty('--highlight-current', '#00838F');
+  } else if (isOrangish) {
+    // 字体为橙色系 → 高亮改为绿色系
+    root.style.setProperty('--highlight', '#66BB6A');
+    root.style.setProperty('--highlight-current', '#2E7D32');
+  } else {
+    // 默认高亮色
+    root.style.setProperty('--highlight', '#FFEB3B');
+    root.style.setProperty('--highlight-current', '#FF9800');
+  }
+}
+
+// 【新增】判断两个颜色是否接近（欧几里得距离）
+function isColorClose(hex1, hex2, threshold = 100) {
+  hex1 = hex1.replace('#', '');
+  hex2 = hex2.replace('#', '');
+  const r1 = parseInt(hex1.substring(0, 2), 16), g1 = parseInt(hex1.substring(2, 4), 16), b1 = parseInt(hex1.substring(4, 6), 16);
+  const r2 = parseInt(hex2.substring(0, 2), 16), g2 = parseInt(hex2.substring(2, 4), 16), b2 = parseInt(hex2.substring(4, 6), 16);
+  const dist = Math.sqrt((r1-r2)**2 + (g1-g2)**2 + (b1-b2)**2);
+  return dist < threshold;
+}
+
+// ========== 全屏 ==========
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+
+// ========== 背景图片 ==========
+function handleBgImageUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    state.bgImage = reader.result;
+    // 【修改】背景图片作为叠加层，背景色作为底层
+    $('#bgImageLayer').style.backgroundImage = `url(${state.bgImage})`;
+    $('#bgImageLayer').style.opacity = (100 - state.bgOpacity) / 100;
+    $('#bgOpacityRow').style.display = 'flex';
+    savePreferences();
+    showToast('背景图已设置');
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+// 【新增】清除背景图片（恢复纯色背景）
+function clearBgImage() {
+  state.bgImage = null;
+  $('#bgImageLayer').style.backgroundImage = '';
+  $('#bgImageLayer').style.opacity = '0';
+  $('#bgOpacityRow').style.display = 'none';
+  savePreferences();
+  showToast('背景图已清除');
+}
+
+// ========== 进度保存/恢复 ==========
+function saveProgress() {
+  if (!state.currentFile) return;
+  if (state.readMode === 'page') {
+    lsSet('page_' + state.currentFile.hash, state.currentPage);
+  }
+}
+
+function restoreProgress() {
+  if (!state.currentFile) return;
+  if (state.readMode === 'page') {
+    const savedPage = lsGet('page_' + state.currentFile.hash, 0);
+    if (savedPage < state.totalPages) {
+      goToPage(savedPage);
+    }
+  }
+  updateBookmarkIcon();
+}
+
+// ========== 键盘快捷键 ==========
+function handleKeyboard(e) {
+  // 搜索框内
+  if (e.target.id === 'searchInput') {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      navigateSearch(e.shiftKey ? -1 : 1);
+    }
+    if (e.key === 'Escape') closeSearch();
+    return;
+  }
+
+  // 设置面板内
+  if (state.settingsOpen && e.key === 'Escape') {
+    closeSettings();
+    return;
+  }
+
+  switch (e.key) {
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      if (state.readMode === 'page') { e.preventDefault(); prevPage(); }
+      break;
+    case 'ArrowRight':
+    case 'ArrowDown':
+    case ' ':
+      if (state.readMode === 'page') { e.preventDefault(); nextPage(); }
+      break;
+    case 'Home':
+      if (state.readMode === 'page') { e.preventDefault(); goToPage(0); }
+      break;
+    case 'End':
+      if (state.readMode === 'page') { e.preventDefault(); goToPage(state.totalPages - 1); }
+      break;
+    case 'f':
+    case 'F':
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); toggleSearch(); }
+      break;
+    case 'Escape':
+      closeSearch();
+      closeSettings();
+      closeAllSidebars();
+      break;
+  }
+}
+
+// ========== 点击空白区域 ==========
+function handleBlankClick(e) {
+  // 排除交互元素
+  const tag = e.target.tagName;
+  if (['BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'A', 'LABEL', 'OPTION'].includes(tag)) return;
+  if (e.target.closest('.icon-btn') || e.target.closest('.sidebar') ||
+      e.target.closest('.settings-panel') || e.target.closest('.search-bar') ||
+      e.target.closest('.bottombar') || e.target.closest('.topbar') ||
+      e.target.closest('.welcome-screen') || e.target.closest('.autoscroll-indicator') ||
+      e.target.closest('.drop-overlay') || e.target.closest('.mode-group') ||
+      e.target.closest('.bookmark-item') || e.target.closest('.bookshelf-item') ||
+      e.target.closest('.toc-item') || e.target.closest('.bg-preset') ||
+      e.target.closest('.layout-option') ||
+      e.target.closest('.mobile-page-nav') || e.target.closest('.mobile-page-capsule') ||
+      e.target.closest('.mobile-more-menu')) return;
+
+  // 检测是否为拖选（有选中文字则忽略）
+  if (window.getSelection() && window.getSelection().toString().length > 0) return;
+
+  // 按优先级关闭
+  if (state.searchOpen) { closeSearch(); return; }
+  if (state.settingsOpen) { closeSettings(); return; }
+  if (state.sidebarOpen) { closeAllSidebars(); return; }
+  if (state.fullscreen) { document.exitFullscreen().catch(() => {}); return; }
+}
+
+// ========== 窗口大小变化时重新分页 ==========
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (state.currentFile && state.readMode === 'page') {
+      const currentPage = state.currentPage;
+      paginateContent();
+      renderContent();
+      if (currentPage < state.totalPages) goToPage(currentPage);
+    }
+  }, 300);
+});
+
+// ========== 启动 ==========
+init();
+
+// ========== 【新增】移动端响应式逻辑 ==========
+
+// 移动端"更多"菜单
+$('#btnMore').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const menu = $('#mobileMoreMenu');
+  menu.classList.toggle('visible');
+});
+
+// 更多菜单项点击 → 执行对应功能
+$('#mmBookmark').addEventListener('click', () => {
+  $('#mobileMoreMenu').classList.remove('visible');
+  toggleBookmark();
+});
+$('#mmSettings').addEventListener('click', () => {
+  $('#mobileMoreMenu').classList.remove('visible');
+  toggleSettings();
+});
+$('#mmFullscreen').addEventListener('click', () => {
+  $('#mobileMoreMenu').classList.remove('visible');
+  toggleFullscreen();
+});
+$('#mmNight').addEventListener('click', () => {
+  $('#mobileMoreMenu').classList.remove('visible');
+  toggleNightMode();
+});
+
+// 点击其他区域关闭更多菜单
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#mobileMoreMenu') && !e.target.closest('#btnMore')) {
+    $('#mobileMoreMenu').classList.remove('visible');
+  }
+});
+
+// 移动端浮动翻页箭头
+$('#mobilePrevPage').addEventListener('click', () => { if (state.readMode === 'page') prevPage(); });
+$('#mobileNextPage').addEventListener('click', () => { if (state.readMode === 'page') nextPage(); });
+
+// 【新增】触摸滑动翻页（分页模式下左右滑动）
+let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+const readerContent = $('#readerContent');
+
+readerContent.addEventListener('touchstart', (e) => {
+  if (state.readMode !== 'page') return;
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  touchStartTime = Date.now();
+}, { passive: true });
+
+readerContent.addEventListener('touchend', (e) => {
+  if (state.readMode !== 'page') return;
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  const dt = Date.now() - touchStartTime;
+  // 水平滑动距离 > 50px，且水平位移 > 垂直位移，且时间 < 500ms
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5 && dt < 500) {
+    if (dx < 0) nextPage(); // 左滑 → 下一页
+    else prevPage();         // 右滑 → 上一页
+  }
+}, { passive: true });
+
+// 【新增】移动端页码胶囊同步更新
+const _origUpdateStatus = updateStatus;
+// 重写 updateStatus 以同时更新移动端胶囊
+window.updateStatus = function() {
+  _origUpdateStatus();
+  if (!state.currentFile) {
+    $('#mobileStatusInfo').textContent = '-- / --';
+    $('#mobileStatusPercent').textContent = '--%';
+    return;
+  }
+  if (state.readMode === 'page') {
+    $('#mobileStatusInfo').textContent = `${state.currentPage + 1} / ${state.totalPages}`;
+    const pct = state.totalPages > 0 ? Math.round(((state.currentPage + 1) / state.totalPages) * 100) : 0;
+    $('#mobileStatusPercent').textContent = pct + '%';
+  } else {
+    const el = $('#readerContent');
+    const pct = el.scrollHeight > el.clientHeight ? Math.round((el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100) : 100;
+    $('#mobileStatusInfo').textContent = '';
+    $('#mobileStatusPercent').textContent = pct + '%';
+  }
+};
+
+// 【新增】移动端检测：根据屏幕宽度调整默认字号
+function applyMobileDefaults() {
+  if (window.innerWidth < 768) {
+    // 仅在用户从未自定义过字号时调整（通过检查是否有文件级设置）
+    if (!state.currentFile && state.settings.fontSize === 18) {
+      state.settings.fontSize = 16;
+      applyPreferences();
+    }
+  }
+}
+applyMobileDefaults();
+window.addEventListener('resize', () => {
+  clearTimeout(applyMobileDefaults._timer);
+  applyMobileDefaults._timer = setTimeout(applyMobileDefaults, 300);
+});
+</script>
+</body>
+</html>
