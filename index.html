@@ -79,7 +79,13 @@ html, body {
 }
 .topbar-left { flex: 1; justify-content: flex-start; }
 .topbar-center { flex: 0 0 auto; }
-.topbar-right { flex: 1; justify-content: flex-end; }
+.topbar-right { 
+  flex: 1; 
+  justify-content: flex-end; 
+  /* 修复移动端三点菜单：确保按钮不被裁剪 */
+  overflow: visible;
+  position: relative;
+}
 
 /* ========== 图标按钮 ========== */
 .icon-btn {
@@ -607,12 +613,22 @@ html, body {
   :root { --content-width: 100vw; --sidebar-width: 100vw; --topbar-height: 44px; --bottombar-height: 0px; }
   html, body { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .content-wrapper { padding: 12px 10px; }
-  .topbar { padding: 0 8px; }
+  /* 修复移动端三点菜单：顶栏 z-index 确保按钮在菜单之上 */
+  .topbar { padding: 0 8px; z-index: 999; position: relative; }
   .file-name { max-width: 100px; font-size: 12px; }
 
   /* 【移动端】工具栏：隐藏次要按钮，显示"更多"按钮 */
   .topbar-right .mobile-hide { display: none !important; }
   .topbar-right .mobile-show { display: flex !important; }
+
+  /* 修复移动端三点菜单：按钮用 class 选择器确保特异性一致 */
+  #btnMore {
+    display: flex !important;
+    position: relative;
+    z-index: 10001;
+    width: 44px;
+    height: 44px;
+  }
 
   /* 【移动端】图标按钮触摸目标 ≥ 44px */
   .icon-btn { width: 40px; height: 40px; }
@@ -626,33 +642,12 @@ html, body {
   /* 【移动端】底部状态栏隐藏（改用浮动翻页箭头+胶囊页码） */
   .bottombar { display: none; }
 
-  /* 【移动端】浮动翻页箭头 */
+  /* 【删除】移动端浮动翻页箭头样式（已移除） */
+/*
   .mobile-page-nav { display: flex !important; }
-  .mobile-page-arrow {
-    position: fixed; top: 50%; transform: translateY(-50%);
-    width: 48px; height: 80px;
-    background: rgba(0,0,0,0.15);
-    border: none; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--text-muted); font-size: 24px;
-    z-index: 80; transition: background 0.2s;
-    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
-  }
-  .mobile-page-arrow:active { background: rgba(0,0,0,0.3); }
-  .mobile-page-arrow.prev { left: 4px; border-radius: 0 12px 12px 0; }
-  .mobile-page-arrow.next { right: 4px; border-radius: 12px 0 0 12px; }
-
-  /* 【移动端】浮动页码胶囊 */
-  .mobile-page-capsule {
-    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-    padding: 6px 16px;
-    background: rgba(0,0,0,0.45);
-    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-    color: #fff; border-radius: 20px;
-    font-size: 12px; z-index: 80;
-    display: flex; gap: 12px; align-items: center;
-    pointer-events: none;
-  }
+  .mobile-page-arrow { ... }
+  .mobile-page-capsule { ... }
+*/
 
   /* 【移动端】搜索栏全宽 */
   .search-bar { height: auto; flex-wrap: wrap; padding: 8px 10px; gap: 6px; }
@@ -673,19 +668,27 @@ html, body {
   .settings-panel.right-layout { right: 0; transform: translateY(100%); }
   .settings-panel.visible { transform: translateY(0); }
 
-  /* 【移动端】"更多"下拉菜单 */
+  /* 修复移动端三点菜单：菜单 z-index 必须最高，visibility 避免遮挡 */
   .mobile-more-menu {
-    position: fixed; top: var(--topbar-height); right: 0;
+    position: fixed;
+    top: var(--topbar-height);
+    right: 0;
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: 0 0 0 12px;
     box-shadow: -2px 4px 16px var(--shadow);
-    z-index: 110;
+    z-index: 10002;
     padding: 8px 0;
     transform: scaleY(0); transform-origin: top right;
-    transition: transform 0.2s;
+    transition: transform 0.2s, opacity 0.2s;
+    opacity: 0;
+    visibility: hidden;
   }
-  .mobile-more-menu.visible { transform: scaleY(1); }
+  .mobile-more-menu.visible {
+    transform: scaleY(1);
+    opacity: 1;
+    visibility: visible;
+  }
   .mobile-more-menu button {
     display: flex; align-items: center; gap: 10px;
     width: 100%; padding: 12px 16px;
@@ -710,17 +713,16 @@ html, body {
   .autoscroll-indicator { bottom: 48px; }
 }
 
-/* ========== 电脑端 (≥768px) 隐藏移动端专用元素 ========== */
-.mobile-page-nav,
-.mobile-page-capsule,
-.mobile-more-menu {
+/* 修复：三点菜单在桌面端不应显示（因为所有按钮都在顶栏可见）
+ * 使用 class 选择器，避免与移动端媒体查询冲突（之前错误用了 ID 选择器导致特异性过高）*/
+#btnMore,
+.mobile-show {
   display: none;
 }
 
 /* 【移动端】默认隐藏"更多"按钮，电脑端不显示 */
-.mobile-show { display: none !important; }
-@media (max-width: 767px) {
-  .mobile-show { display: flex !important; }
+/* 修复：移除 mobile-show 的 !important 冲突，让媒体查询能正确覆盖 */
+.mobile-show { display: none; }
 }
 </style>
 </head>
@@ -819,16 +821,7 @@ html, body {
   <span id="statusPercent">--%</span>
 </div>
 
-<!-- 【新增】移动端浮动翻页箭头 -->
-<div class="mobile-page-nav" id="mobilePageNav">
-  <button class="mobile-page-arrow prev" id="mobilePrevPage">‹</button>
-  <button class="mobile-page-arrow next" id="mobileNextPage">›</button>
-</div>
-<!-- 【新增】移动端浮动页码胶囊 -->
-<div class="mobile-page-capsule" id="mobilePageCapsule">
-  <span id="mobileStatusInfo">-- / --</span>
-  <span id="mobileStatusPercent">--%</span>
-</div>
+<!-- 【删除】移动端浮动翻页箭头（已移除） -->
 
 <!-- 【新增】移动端"更多"下拉菜单 -->
 <div class="mobile-more-menu" id="mobileMoreMenu">
@@ -1418,6 +1411,15 @@ function bindEvents() {
   // 侧边栏
   $('#sidebarOverlay').addEventListener('click', closeAllSidebars);
 
+  /* 修复 × 按钮：为三个侧边栏的关闭按钮绑定点击事件 */
+  $('#closeToc').addEventListener('click', closeAllSidebars);
+  $('#closeBookmark').addEventListener('click', closeAllSidebars);
+  $('#closeBookshelf').addEventListener('click', closeAllSidebars);
+  /* 修复移动端 × 按钮：添加 touchend 支持（移动端触摸设备） */
+  $('#closeToc').addEventListener('touchend', (e) => { e.preventDefault(); closeAllSidebars(); });
+  $('#closeBookmark').addEventListener('touchend', (e) => { e.preventDefault(); closeAllSidebars(); });
+  $('#closeBookshelf').addEventListener('touchend', (e) => { e.preventDefault(); closeAllSidebars(); });
+
   // 自动滚动
   $('#autoScrollSlower').addEventListener('click', () => changeAutoScrollSpeed(-0.5));
   $('#autoScrollFaster').addEventListener('click', () => changeAutoScrollSpeed(0.5));
@@ -1686,12 +1688,9 @@ function updateModeButtons() {
     btn.classList.toggle('active', btn.dataset.mode === state.readMode);
   });
   $('#autoscrollIndicator').classList.toggle('visible', state.readMode === 'auto');
-  // 【新增】移动端浮动翻页箭头仅在分页模式下显示
-  const isMobile = window.innerWidth < 768;
-  const nav = $('#mobilePageNav');
-  const capsule = $('#mobilePageCapsule');
-  if (nav) nav.style.display = (isMobile && state.readMode === 'page') ? 'flex' : 'none';
-  if (capsule) capsule.style.display = (isMobile && state.readMode === 'page') ? 'flex' : 'none';
+  // 【删除】移动端浮动翻页箭头/胶囊显示逻辑（已移除）
+  // const isMobile = window.innerWidth < 768;
+  // if (nav) nav.style.display = ...
 }
 
 // ========== 状态栏更新 ==========
@@ -2542,42 +2541,93 @@ window.addEventListener('resize', () => {
 init();
 
 // ========== 【新增】移动端响应式逻辑 ==========
+// ========== 修复移动端三点菜单：彻底重写，简化逻辑，使用原生JS避免 jQuery 冲突 ==========
 
-// 移动端"更多"菜单
-$('#btnMore').addEventListener('click', (e) => {
-  e.stopPropagation();
-  const menu = $('#mobileMoreMenu');
-  menu.classList.toggle('visible');
-});
+var _menuOpen = false;
+var _menuEl = null;
+var _btnMoreEl = null;
 
-// 更多菜单项点击 → 执行对应功能
-$('#mmBookmark').addEventListener('click', () => {
-  $('#mobileMoreMenu').classList.remove('visible');
-  toggleBookmark();
-});
-$('#mmSettings').addEventListener('click', () => {
-  $('#mobileMoreMenu').classList.remove('visible');
-  toggleSettings();
-});
-$('#mmFullscreen').addEventListener('click', () => {
-  $('#mobileMoreMenu').classList.remove('visible');
-  toggleFullscreen();
-});
-$('#mmNight').addEventListener('click', () => {
-  $('#mobileMoreMenu').classList.remove('visible');
-  toggleNightMode();
-});
+function getMenuEl() { if (!_menuEl) _menuEl = document.getElementById('mobileMoreMenu'); return _menuEl; }
+function getBtnMoreEl() { if (!_btnMoreEl) _btnMoreEl = document.getElementById('btnMore'); return _btnMoreEl; }
 
-// 点击其他区域关闭更多菜单
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('#mobileMoreMenu') && !e.target.closest('#btnMore')) {
-    $('#mobileMoreMenu').classList.remove('visible');
+function openMobileMenu() {
+  var menu = getMenuEl();
+  if (menu) { menu.classList.add('visible'); }
+  document.body.style.overflow = 'hidden';
+  _menuOpen = true;
+}
+function closeMobileMenu() {
+  var menu = getMenuEl();
+  if (menu) { menu.classList.remove('visible'); }
+  document.body.style.overflow = '';
+  _menuOpen = false;
+}
+function toggleMobileMenu(e) {
+  if (e) { e.stopPropagation(); e.preventDefault(); }
+  if (_menuOpen) { closeMobileMenu(); } else { openMobileMenu(); }
+}
+
+// 绑定三点按钮事件（click 和 touchend）
+var btnMore = getBtnMoreEl();
+if (btnMore) {
+  btnMore.addEventListener('click', toggleMobileMenu);
+  btnMore.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleMobileMenu(null);
+  });
+  // 明确设置 pointer-events
+  btnMore.style.pointerEvents = 'auto';
+  btnMore.style.cursor = 'pointer';
+}
+
+// 菜单项按钮事件
+var mmConfig = [
+  ['mmBookmark', toggleBookmark],
+  ['mmSettings', toggleSettings],
+  ['mmFullscreen', toggleFullscreen],
+  ['mmNight', toggleNightMode]
+];
+mmConfig.forEach(function(cfg) {
+  var el = document.getElementById(cfg[0]);
+  if (el) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      closeMobileMenu();
+      cfg[1]();
+    });
+    el.addEventListener('touchend', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      closeMobileMenu();
+      cfg[1]();
+    });
   }
 });
 
-// 移动端浮动翻页箭头
-$('#mobilePrevPage').addEventListener('click', () => { if (state.readMode === 'page') prevPage(); });
-$('#mobileNextPage').addEventListener('click', () => { if (state.readMode === 'page') nextPage(); });
+// document 点击/touchend 关闭菜单
+document.addEventListener('click', function(e) {
+  if (!_menuOpen) return;
+  var menu = getMenuEl();
+  var btn = getBtnMoreEl();
+  if (menu && !menu.contains(e.target) && btn && !btn.contains(e.target)) {
+    closeMobileMenu();
+  }
+});
+document.addEventListener('touchend', function(e) {
+  if (!_menuOpen) return;
+  var menu = getMenuEl();
+  var btn = getBtnMoreEl();
+  if (menu && !menu.contains(e.target) && btn && !btn.contains(e.target)) {
+    closeMobileMenu();
+  }
+});
+
+// 【删除】移动端浮动翻页箭头事件（已移除）
+  // $('#mobilePrevPage').addEventListener(...);
+  // $('#mobileNextPage').addEventListener(...);
 
 // 【新增】触摸滑动翻页（分页模式下左右滑动）
 let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
@@ -2604,24 +2654,9 @@ readerContent.addEventListener('touchend', (e) => {
 
 // 【新增】移动端页码胶囊同步更新
 const _origUpdateStatus = updateStatus;
-// 重写 updateStatus 以同时更新移动端胶囊
+// 【删除】移动端胶囊状态更新逻辑（已移除浮动翻页箭头）
 window.updateStatus = function() {
   _origUpdateStatus();
-  if (!state.currentFile) {
-    $('#mobileStatusInfo').textContent = '-- / --';
-    $('#mobileStatusPercent').textContent = '--%';
-    return;
-  }
-  if (state.readMode === 'page') {
-    $('#mobileStatusInfo').textContent = `${state.currentPage + 1} / ${state.totalPages}`;
-    const pct = state.totalPages > 0 ? Math.round(((state.currentPage + 1) / state.totalPages) * 100) : 0;
-    $('#mobileStatusPercent').textContent = pct + '%';
-  } else {
-    const el = $('#readerContent');
-    const pct = el.scrollHeight > el.clientHeight ? Math.round((el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100) : 100;
-    $('#mobileStatusInfo').textContent = '';
-    $('#mobileStatusPercent').textContent = pct + '%';
-  }
 };
 
 // 【新增】移动端检测：根据屏幕宽度调整默认字号
